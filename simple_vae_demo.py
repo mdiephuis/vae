@@ -20,6 +20,9 @@ from visdom import Visdom
 
 from vae_models import CVAE
 
+from nn_helpers.losses import loss_bce_kld, EarlyStopping
+from nn_helpers.utils import one_hot_np
+
 
 parser = argparse.ArgumentParser(description='VAE example')
 
@@ -43,7 +46,7 @@ parser.add_argument('--lr', type=float, default=1e-4,
                     help='Learning rate (default: 1e-4')
 
 # Visdom / tensorboard
-parser.add_argument('--visdom-url', type='str', default=None,
+parser.add_argument('--visdom-url', type=str, default=None,
                     help='visdom url, needs http, e.g. http://localhost (default: None)')
 parser.add_argument('--visdom-port', type=int, default=8097,
                     help='visdom server port (default: 8097')
@@ -64,7 +67,7 @@ parser.add_argument('--seed', type=int, default=None,
 args = parser.parse_args()
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
-use_visdom = not args.no_visdom
+use_visdom = args.visdom_url is not None
 
 
 # Handle randomization
@@ -110,8 +113,7 @@ def reconstruction_example(model, device, dtype):
     for _, (x, y) in enumerate(loader_val):
         x = x.type(dtype)
         x = x.to(device)
-
-        y = torch.from_numpy(one_hot(y))
+        y = torch.from_numpy(one_hot_np(y, 10))
         y = y.type(dtype)
         y = y.to(device)
         x_hat, _, _ = model(x, y)
@@ -153,12 +155,6 @@ def init_weights(m):
         init.xavier_uniform_(m.weight.data)
 
 
-def one_hot(labels, n_class=10):
-    vec = np.zeros((labels.shape[0], n_class))
-    for ind, label in enumerate(labels):
-        vec[ind, label] = 1
-    return vec
-
 
 def get_optimizer(model):
     lr = 1e-3
@@ -167,19 +163,6 @@ def get_optimizer(model):
     optimizer = Adam(model.parameters(), lr=lr,
                      betas=(beta1, beta2))
     return optimizer
-
-
-def loss_bce_kld(x, x_hat, mu, log_var):
-    """
-    see Appendix B from VAE paper:
-    Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
-    https://arxiv.org/abs/1312.6114
-    0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
-    """
-    BCE = F.binary_cross_entropy(x_hat, x.view(-1, 784), size_average=True)
-    KLD = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp())
-
-    return KLD + BCE
 
 
 def execute_graph(model, conditional, loader_train, loader_val,
@@ -230,7 +213,7 @@ def train_validate(model, loader_data, loss_fn, scheduler, conditional, train):
             opt.zero_grad()
         if conditional:
             # use new function
-            y = torch.from_numpy(one_hot(y))
+            y = torch.from_numpy(one_hot_np(y, 10))
             # refractor out
             y = y.type(dtype)
             y = y.to(device)
