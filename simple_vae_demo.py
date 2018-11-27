@@ -19,7 +19,7 @@ from torch.utils.data import DataLoader
 from visdom import Visdom
 
 from vae_models import CVAE
-from net_utils import EarlyStopping
+
 
 parser = argparse.ArgumentParser(description='VAE example')
 
@@ -185,12 +185,12 @@ def loss_bce_kld(x, x_hat, mu, log_var):
 def execute_graph(model, conditional, loader_train, loader_val,
                   loss_fn, scheduler, use_visdom):
     # Training loss
-    t_loss = train(model, conditional, loader_train, loss_bce_kld, scheduler)
+    t_loss = train_validate(model, loader_train, loss_bce_kld, scheduler, conditional, train=True)
 
     # Validation loss
-    v_loss = validate(model, conditional, loader_val, loss_bce_kld, scheduler)
+    v_loss = train_validate(model, loader_val, loss_bce_kld, scheduler, conditional, train=False)
 
-    # Step the scheduler
+    # Step the scheduler based on the validation loss
     scheduler.step(v_loss)
 
     print('====> Epoch: {} Average Train loss: {:.4f}'.format(
@@ -220,43 +220,32 @@ def execute_graph(model, conditional, loader_train, loader_val,
     return v_loss
 
 
-def train(model, conditional, loader_data, loss_fn, scheduler):
-    model.train()
-    train_loss = 0
-    n_train = len(loader_data.dataset)
+def train_validate(model, loader_data, loss_fn, scheduler, conditional, train):
+    model.train() if train else model.eval()
+    loss = 0
+    batch_sz = len(loader_data.dataset)
     for batch_idx, (x, y) in enumerate(loader_data):
         x = x.to(device)
-        opt.zero_grad()
+        if train:
+            opt.zero_grad()
         if conditional:
+            # use new function
             y = torch.from_numpy(one_hot(y))
+            # refractor out
             y = y.type(dtype)
             y = y.to(device)
             x_hat, mu, log_var = model(x, y)
         else:
             x_hat, mu, log_var = model(x)
         loss = loss_fn(x, x_hat, mu, log_var)
-        loss.backward()
-        train_loss += loss.item()
-        opt.step()
-    return train_loss / n_train
 
+        loss += loss.item()
 
-def validate(model, conditional, loader_data, loss_fn, scheduler):
-    model.eval()
-    val_loss = 0
-    n_val = len(loader_data.dataset)
-    for batch_idx, (x, y) in enumerate(loader_data):
-        x = x.to(device)
-        if conditional:
-            y = torch.from_numpy(one_hot(y))
-            y = y.type(dtype)
-            y = y.to(device)
-            x_hat, mu, log_var = model(x, y)
-        else:
-            x_hat, mu, log_var = model(x)
-        val_loss += loss_fn(x, x_hat, mu, log_var).item()
-
-    return val_loss / n_val
+        if train:
+            loss.backward()
+            opt.step()
+    # collect better stats
+    return loss / batch_sz
 
 
 """
