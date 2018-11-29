@@ -3,6 +3,7 @@ todo.txt
 data/
 models/
 output/
+notebooks/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

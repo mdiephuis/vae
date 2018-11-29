@@ -5,29 +5,28 @@
 
 from __future__ import print_function
 import numpy as np
-import time
 import argparse
 import torch
 import torch.nn as nn
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.optim import Adam
 from torch.nn import functional as F
-from torch.nn import init
 from torchvision import datasets, transforms
 from torchvision.utils import save_image
 from torch.utils.data import DataLoader
-from visdom import Visdom
 
 from vae_models import CVAE
 
 from nn_helpers.losses import loss_bce_kld, EarlyStopping
-from nn_helpers.utils import one_hot_np
+from nn_helpers.utils import one_hot_np, init_weights
+from nn_helpers.visdom_grapher import VisdomGrapher
 
 
 parser = argparse.ArgumentParser(description='VAE example')
 
 # Task parameters
-
+parser.add_argument('--uid', type=str, default='VAE',
+                    help='Staging identifier (default:VAE)')
 
 # Model parameters
 
@@ -74,6 +73,8 @@ use_visdom = args.visdom_url is not None
 
 
 # Enable CUDA, set tensor type and device
+# todo: refractor this
+
 if args.cuda:
     dtype = torch.cuda.FloatTensor
     device = torch.device("cuda:0")
@@ -89,23 +90,6 @@ if args.seed is not None:
     torch.manual_seed(args.seed)
     if args.cuda:
         torch.cuda.manual_seed(args.seed)
-
-
-# Visdom hooks
-def update_plot(win_title, y, x, opts={}):
-    '''
-    Update vidomplot by win_title. If it doesn't exist, create a new plot
-    - win_title: name and title of plot
-    - y: y coord
-    - x: x coord
-    - options_dict, example {'legend': 'NAME', 'ytickmin': 0, 'ytickmax': 1}
-    '''
-    if not viz.win_exists(win_title):
-        viz.line(Y=np.array([y]), X=np.array([x]), win=win_title,
-                 opts=opts)
-    else:
-        viz.line(Y=np.array([y]), X=np.array([x]), win=win_title,
-                 update='append', opts=opts)
 
 
 def reconstruction_example(model, device, dtype):
@@ -150,12 +134,6 @@ loader_val = DataLoader(
     batch_size=args.batch_size, shuffle=True, **kwargs)
 
 
-def init_weights(m):
-    if isinstance(m, nn.Linear) or isinstance(m, nn.ConvTranspose2d):
-        init.xavier_uniform_(m.weight.data)
-
-
-
 def get_optimizer(model):
     lr = 1e-3
     beta1 = 0.9
@@ -183,29 +161,25 @@ def execute_graph(model, conditional, loader_train, loader_val,
 
     if use_visdom:
         # Visdom: update training and validation loss plots
-        update_plot('tloss', y=t_loss, x=epoch,
-                    opts=dict(title='Training loss'))
-
-        update_plot('vloss', y=v_loss, x=epoch,
-                    opts=dict(title='Validation loss'))
+        vis.add_scalar('Training loss', idtag='train', y=t_loss, x=epoch)
+        vis.add_scalar('Validation loss', idtag='valid', y=v_loss, x=epoch)
 
         # Visdom: Show generated images
         sample = latentspace_example(model, device)
         sample = sample.detach().numpy()
-        viz.images(sample, win='gen',
-                   opts=dict(title='Generated sample ' + str(epoch)))
+        vis.add_image('Generated sample ' + str(epoch), 'generated', sample)
 
         # Visdom: Show example reconstruction
         comparison = reconstruction_example(model, device, dtype)
-        viz.images(comparison.detach().numpy(), win='recon',
-                   opts=dict(title='Reconstruction ' + str(epoch)))
+        comparison = comparison.detach().numpy()
+        vis.add_image('Reconstruction sample ' + str(epoch), 'recon', comparison)
 
     return v_loss
 
 
 def train_validate(model, loader_data, loss_fn, scheduler, conditional, train):
     model.train() if train else model.eval()
-    loss = 0
+    batch_loss = 0
     batch_sz = len(loader_data.dataset)
     for batch_idx, (x, y) in enumerate(loader_data):
         x = x.to(device)
@@ -220,28 +194,23 @@ def train_validate(model, loader_data, loss_fn, scheduler, conditional, train):
             x_hat, mu, log_var = model(x, y)
         else:
             x_hat, mu, log_var = model(x)
+
         loss = loss_fn(x, x_hat, mu, log_var)
 
-        loss += loss.item()
+        batch_loss += loss.item()
 
         if train:
             loss.backward()
             opt.step()
     # collect better stats
-    return loss / batch_sz
+    return batch_loss / batch_sz
 
 
 """
 Visdom init
 """
 if use_visdom:
-    env_name = 'VAE'
-    viz = Visdom(env=env_name)
-    startup_sec = 2
-    while not viz.check_connection() and startup_sec > 0:
-        time.sleep(0.1)
-        startup_sec -= 0.1
-    # assert viz.check_connection(), 'Visdom connection failed'
+    vis = VisdomGrapher(args.uid, args.visdom_url, args.visdom_port)
 
 """
 Run a conditional one-hot VAE
