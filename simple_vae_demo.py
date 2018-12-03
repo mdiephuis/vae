@@ -9,8 +9,7 @@ from torchvision.utils import save_image
 from vae_models import CVAE
 
 from nn_helpers.losses import loss_bce_kld, EarlyStopping
-from nn_helpers.utils import init_weights, one_hot
-from nn_helpers.utils import type_tfloat
+from nn_helpers.utils import init_weights, one_hot, to_cuda, type_tfloat, randn, eye
 from nn_helpers.visdom_grapher import VisdomGrapher
 from nn_helpers.data import Loader
 
@@ -100,6 +99,7 @@ def reconstruction_example(model, data_loader):
     img_shape = data_loader.img_shape[1:]
 
     for _, (x, y) in enumerate(data_loader.test_loader):
+        x = to_cuda(x) if args.cuda else x
         y = one_hot(y, num_class)
         y = y.type(type_tfloat(args.cuda))
         x_hat, _, _ = model(x, y)
@@ -115,8 +115,8 @@ def latentspace_example(model, latent_size, data_loader):
     num_class = data_loader.num_class
     img_shape = data_loader.img_shape[1:]
 
-    draw = torch.randn(num_class, latent_size, )
-    label = torch.eye(num_class, num_class, )
+    draw = randn((num_class, latent_size), args.cuda)
+    label = eye(num_class, args.cuda)
     sample = model.decode(draw, label).cpu().view(num_class, 1, img_shape[0], img_shape[1])
     return sample
 
@@ -178,6 +178,7 @@ def train_validate(model, data_loader, loss_fn, optimizer, conditional, train):
 
     for batch_idx, (x, y) in enumerate(loader):
         loss = 0
+        x = to_cuda(x) if args.cuda else x
         if train:
             opt.zero_grad()
         if conditional:
