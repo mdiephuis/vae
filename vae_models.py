@@ -9,6 +9,8 @@ import torch.nn as nn
 from torch.nn import functional as F
 import numpy as np
 
+from nn_helpers.layers import DCGAN_Encoder, DCGAN_Decoder
+
 
 class VAE(nn.Module):
     """
@@ -98,3 +100,20 @@ class CVAE(nn.Module):
         mu, log_var = self.encode(x.view(-1, self.input_shape), y)
         z = self.reparameterize(mu, log_var)
         return self.decode(z, y), mu, log_var
+
+
+class INFO_VAE(nn.Module):
+    '''
+    Info VAE model, using DC-GAN Encoders and Decoders
+    '''
+
+    def __init__(self, input_shape, out_channels, encoder_size, decoder_size, latent_size):
+        super(INFO_VAE, self).__init__()
+        self.encoder = DCGAN_Encoder(input_shape, out_channels, encoder_size, latent_size)
+        H_conv_out = self.encoder.H_conv_out
+        self.decoder = DCGAN_Decoder(H_conv_out, out_channels, decoder_size, latent_size)
+
+    def forward(self, x):
+        z = self.encoder(x)
+        x_hat = self.decoder(x)
+        return z, x_hat
