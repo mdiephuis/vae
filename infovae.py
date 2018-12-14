@@ -102,6 +102,7 @@ def reconstruction_example(model, data_loader):
     img_shape = data_loader.img_shape[1:]
 
     for (x, _) in data_loader.test_loader:
+        x = to_cuda(x) if args.cuda else x
         _, x_hat = model(x)
         break
 
