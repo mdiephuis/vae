@@ -110,10 +110,9 @@ class INFO_VAE(nn.Module):
     def __init__(self, input_shape, out_channels, encoder_size, decoder_size, latent_size):
         super(INFO_VAE, self).__init__()
         self.encoder = DCGAN_Encoder(input_shape, out_channels, encoder_size, latent_size)
-        H_conv_out = self.encoder.H_conv_out
-        self.decoder = DCGAN_Decoder(H_conv_out, out_channels, decoder_size, latent_size)
+        self.decoder = DCGAN_Decoder(self.encoder.H_conv_out, out_channels, decoder_size, latent_size)
 
     def forward(self, x):
         z = self.encoder(x)
-        x_hat = self.decoder(x)
+        x_hat = self.decoder(z)
         return z, x_hat

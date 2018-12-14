@@ -29,6 +29,9 @@ parser.add_argument('--encoder-size', type=int, default=1024, metavar='N',
                     help='VAE encoder size (default: 1024')
 parser.add_argument('--decoder-size', type=int, default=1024, metavar='N',
                     help='VAE encoder size (default: 1024')
+parser.add_argument('--sigma', type=int, default=1, metavar='N',
+                    help='KL prior sigma (default: 1')
+
 
 # data loader parameters
 parser.add_argument('--dataset-name', type=str, default=None,
@@ -122,12 +125,12 @@ def get_optimizer(model):
     return optimizer
 
 
-def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer, use_visdom):
+def execute_graph(model, conditional, data_loader, loss_fn, sigma, scheduler, optimizer, use_visdom):
     # Training loss
-    t_loss = train_validate(model, data_loader, loss_fn, optimizer, conditional, train=True)
+    t_loss = train_validate(model, data_loader, loss_fn, sigma, optimizer, conditional, train=True)
 
     # Validation loss
-    v_loss = train_validate(model, data_loader, loss_fn, optimizer, conditional, train=False)
+    v_loss = train_validate(model, data_loader, loss_fn, sigma, optimizer, conditional, train=False)
 
     # Step the scheduler based on the validation loss
     scheduler.step(v_loss)
@@ -150,7 +153,7 @@ def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer
     return v_loss
 
 
-def train_validate(model, data_loader, loss_fn, optimizer, conditional, train):
+def train_validate(model, data_loader, loss_fn, sigma, optimizer, conditional, train):
     model.train() if train else model.eval()
     loader = data_loader.train_loader if train else data_loader.test_loader
 
@@ -165,7 +168,7 @@ def train_validate(model, data_loader, loss_fn, optimizer, conditional, train):
 
         z, x_hat = model(x)
 
-        loss = loss_fn(x, x_hat, z, args.cuda)
+        loss = loss_fn(x, x_hat, z, sigma, args.cuda)
 
         batch_loss += loss.item() / batch_size
 
@@ -196,7 +199,7 @@ out_channels = args.out_channels
 encoder_size = args.encoder_size
 decoder_size = args.decoder_size
 latent_size = args.latent_size
-
+sigma = args.sigma
 
 model = INFO_VAE(input_shape, out_channels, encoder_size, decoder_size, latent_size).type(dtype)
 
@@ -215,7 +218,7 @@ best_loss = np.inf
 
 for epoch in range(1, num_epochs + 1):
     v_loss = execute_graph(model, conditional, data_loader,
-                           loss_fn, scheduler, opt, use_visdom)
+                           loss_fn, sigma, scheduler, opt, use_visdom)
 
     stop = early_stopping.step(v_loss)
 
