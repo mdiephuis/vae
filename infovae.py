@@ -273,6 +273,6 @@ for epoch in range(1, num_epochs + 1):
         break
 
 
-# Make a final reconstruction, and write to disk
-comparison = reconstruction_example(model, data_loader)
-save_image(comparison, 'output/comparison_' + str(num_epochs) + '.png')
+# # Make a final reconstruction, and write to disk
+# comparison = reconstruction_example(model, data_loader, args.cuda)
+# save_image(comparison, 'output/comparison_' + str(num_epochs) + '.png')
