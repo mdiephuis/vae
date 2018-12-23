@@ -98,14 +98,14 @@ if args.seed is not None:
         torch.cuda.manual_seed(args.seed)
 
 
-def reconstruction_example(model, data_loader):
+def reconstruction_example(model, data_loader, use_cuda):
 
     model.eval()
     num_class = data_loader.num_class
     img_shape = data_loader.img_shape[1:]
 
     for (x, _) in data_loader.test_loader:
-        x = to_cuda(x) if args.cuda else x
+        x = to_cuda(x) if use_cuda else x
         _, x_hat = model(x)
         break
 
@@ -119,6 +119,24 @@ def generator_example(model, batch_size, latent_size, use_cuda):
     normal_draw = sample_normal((batch_size, latent_size), use_cuda)
     x_gen = model.decoder(normal_draw).cpu()
     return x_gen
+
+
+def cluster_example(model, data_loader, use_cuda):
+
+    z_list, label_list = [], []
+    n_points = 500
+    for ind, (x, y) in enumerate(data_loader.test_loader):
+        x = to_cuda(x) if use_cuda else x
+        q_z, _ = model(x)
+        z_list.append(q_z.cpu().data.numpy())
+        label_list.append(y.cpu().numpy())
+        if ind * x.size(0) > n_points:
+            break
+
+    z = np.concatenate(z_list, axis=0)
+    label = np.concatenate(label_list)
+
+    return z, label
 
 
 # save checkpoint
@@ -160,9 +178,14 @@ def execute_graph(model, conditional, data_loader, loss_fn, sigma, scheduler, op
         vis.add_tensor_grid(grid_sample, 'Generated sample ' + str(epoch), 'generated', 5)
 
         # Show example reconstruction from the test set
-        comparison = reconstruction_example(model, data_loader)
+        comparison = reconstruction_example(model, data_loader, args.cuda)
         comparison = comparison.detach().numpy()
         vis.add_image(comparison, 'Reconstruction sample ' + str(epoch), 'recon')
+
+        # Cluster demo is latent_size = 2, over the test set
+        if latent_size == 2:
+            z, labels = cluster_example(model, data_loader, args.cuda)
+            vis.add_scatter2d(z, labels, 'Cluster sample ' + str(epoch), 'cluster', reinit=True, opts={})
 
     return v_loss
 
