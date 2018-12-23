@@ -9,9 +9,12 @@ from torchvision.utils import save_image
 from vae_models import INFO_VAE
 
 from nn_helpers.losses import loss_infovae, EarlyStopping
-from nn_helpers.utils import init_weights, one_hot, to_cuda, type_tfloat, randn, eye
+from nn_helpers.utils import init_weights, one_hot, to_cuda, type_tfloat, randn, eye, sample_normal
 from nn_helpers.visdom_grapher import VisdomGrapher
 from nn_helpers.data import Loader
+
+import matplotlib
+matplotlib.use('Agg')
 
 
 parser = argparse.ArgumentParser(description='VAE example')
@@ -40,7 +43,7 @@ parser.add_argument('--data-dir', type=str, default=None,
                     help='directory to load data from (default: none')
 parser.add_argument('--download-data', action='store_true', default=False,
                     help='Automatically download dataset (default: false)')
-parser.add_argument('--batch-size', type=int, default=23, metavar='N',
+parser.add_argument('--batch-size', type=int, default=32, metavar='N',
                     help='input training batch-size (default: 32')
 
 
@@ -95,14 +98,14 @@ if args.seed is not None:
         torch.cuda.manual_seed(args.seed)
 
 
-def reconstruction_example(model, data_loader):
+def reconstruction_example(model, data_loader, use_cuda):
 
     model.eval()
     num_class = data_loader.num_class
     img_shape = data_loader.img_shape[1:]
 
     for (x, _) in data_loader.test_loader:
-        x = to_cuda(x) if args.cuda else x
+        x = to_cuda(x) if use_cuda else x
         _, x_hat = model(x)
         break
 
@@ -110,6 +113,30 @@ def reconstruction_example(model, data_loader):
     x_hat = x_hat[:num_class].cpu().view(num_class * img_shape[0], img_shape[1])
     comparison = torch.cat((x, x_hat), 1).view(num_class * img_shape[0], 2 * img_shape[1])
     return comparison
+
+
+def generator_example(model, batch_size, latent_size, use_cuda):
+    normal_draw = sample_normal((batch_size, latent_size), use_cuda)
+    x_gen = model.decoder(normal_draw).cpu()
+    return x_gen
+
+
+def cluster_example(model, data_loader, use_cuda):
+
+    z_list, label_list = [], []
+    n_points = 500
+    for ind, (x, y) in enumerate(data_loader.test_loader):
+        x = to_cuda(x) if use_cuda else x
+        q_z, _ = model(x)
+        z_list.append(q_z.cpu().data.numpy())
+        label_list.append(y.cpu().numpy())
+        if ind * x.size(0) > n_points:
+            break
+
+    z = np.concatenate(z_list, axis=0)
+    label = np.concatenate(label_list)
+
+    return z, label
 
 
 # save checkpoint
@@ -143,13 +170,22 @@ def execute_graph(model, conditional, data_loader, loss_fn, sigma, scheduler, op
 
     if use_visdom:
         # Visdom: update training and validation loss plots
-        vis.add_scalar('Training loss', idtag='train', y=t_loss, x=epoch)
-        vis.add_scalar('Validation loss', idtag='valid', y=v_loss, x=epoch)
+        vis.add_scalar(y=t_loss, x=epoch, plot_name='Training loss', idtag='train')
+        vis.add_scalar(y=v_loss, x=epoch, plot_name='Validation loss', idtag='valid')
 
-        # Visdom: Show example reconstruction from the test set
-        comparison = reconstruction_example(model, data_loader)
+        # Generator example
+        grid_sample = generator_example(model, data_loader.train_loader.batch_size, latent_size, args.cuda)
+        vis.add_tensor_grid(grid_sample, 'Generated sample ' + str(epoch), 'generated', 5)
+
+        # Show example reconstruction from the test set
+        comparison = reconstruction_example(model, data_loader, args.cuda)
         comparison = comparison.detach().numpy()
-        vis.add_image('Reconstruction sample ' + str(epoch), 'recon', comparison)
+        vis.add_image(comparison, 'Reconstruction sample ' + str(epoch), 'recon')
+
+        # Cluster demo is latent_size = 2, over the test set
+        if latent_size == 2:
+            z, labels = cluster_example(model, data_loader, args.cuda)
+            vis.add_scatter2d(z, labels, 'Cluster sample ' + str(epoch), 'cluster', reinit=True, opts={})
 
     return v_loss
 
@@ -167,9 +203,9 @@ def train_validate(model, data_loader, loss_fn, sigma, optimizer, conditional, t
         if train:
             opt.zero_grad()
 
-        z, x_hat = model(x)
+        q_z, x_hat = model(x)
 
-        loss = loss_fn(x, x_hat, z, sigma, args.cuda)
+        loss = loss_fn(x, x_hat, q_z, sigma, args.cuda)
 
         batch_loss += loss.item() / batch_size
 
@@ -209,7 +245,7 @@ model.apply(init_weights)
 
 opt = get_optimizer(model)
 scheduler = ReduceLROnPlateau(opt, 'min', verbose=True)
-early_stopping = EarlyStopping('min', 0.0005, 15)
+early_stopping = EarlyStopping('min', 0.00025, 15)
 loss_fn = loss_infovae
 
 num_epochs = args.epochs

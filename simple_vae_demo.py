@@ -163,7 +163,7 @@ def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer
         # Visdom: Show example reconstruction from the test set
         comparison = reconstruction_example(model, data_loader)
         comparison = comparison.detach().numpy()
-        vis.add_image('Reconstruction sample ' + str(epoch), 'recon', comparison)
+        vis.add_image(comparison, 'Reconstruction sample ' + str(epoch), 'recon')
 
     return v_loss
 
