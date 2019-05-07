@@ -1,5 +1,5 @@
 # Maurits
-todo.org
+*.org
 todo.txt
 test.py
 data/
@@ -14,6 +14,7 @@ __pycache__/
 
 # tensorboard
 runs/
+logs/
 
 # C extensions
 *.so

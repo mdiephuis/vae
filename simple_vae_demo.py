@@ -11,6 +11,7 @@ from vae_models import CVAE
 from nn_helpers.losses import loss_bce_kld, EarlyStopping
 from nn_helpers.utils import init_weights, one_hot, to_cuda, type_tfloat, randn, eye
 from nn_helpers.visdom_grapher import VisdomGrapher
+from nn_helpers.tf_logger import TFLogger
 from nn_helpers.data import Loader
 
 
@@ -50,13 +51,18 @@ parser.add_argument('--epochs', type=int, default=25, metavar='N',
 parser.add_argument('--lr', type=float, default=1e-4,
                     help='Learning rate (default: 1e-4')
 
-# Visdom / tensorboard
+# Visdom
 parser.add_argument('--visdom-url', type=str, default=None,
                     help='visdom url, needs http, e.g. http://localhost (default: None)')
 parser.add_argument('--visdom-port', type=int, default=8097,
                     help='visdom server port (default: 8097')
 parser.add_argument('--log-interval', type=int, default=1, metavar='N',
                     help='batch interval for logging (default: 1')
+
+# Log directory
+parser.add_argument('--log-dir', type=str, default='logs',
+                    help='logging directory (default: logs)')
+
 
 # Device (GPU)
 parser.add_argument('--no-cuda', action='store_true', default=False,
@@ -71,8 +77,18 @@ parser.add_argument('--seed', type=int, default=None,
 
 args = parser.parse_args()
 
+# Set cuda
 args.cuda = not args.no_cuda and torch.cuda.is_available()
+
+# Set visdom
 use_visdom = args.visdom_url is not None
+
+# Set tensorboard
+use_tb = args.log_dir is not None
+
+# Logger
+if use_tb:
+    logger = TFLogger(args.log_dir)
 
 # Enable CUDA, set tensor type and device
 if args.cuda:
@@ -135,8 +151,8 @@ def get_optimizer(model):
     return optimizer
 
 
-def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer, use_visdom):
-    # Training loss
+def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer, use_visdom, use_tb):
+    # Training los, use_tbs
     t_loss = train_validate(model, data_loader, loss_bce_kld, optimizer, conditional, train=True)
 
     # Validation loss
@@ -149,6 +165,31 @@ def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer
           epoch, t_loss))
     print('====> Epoch: {} Average Validation loss: {:.4f}'.format(
           epoch, v_loss))
+
+    if use_tb:
+        # Training and validation loss
+        info = {'Training loss': t_loss, 'Validation loss': v_loss}
+
+        for tag, value in info.items():
+            logger.add_scalar(tag, value, epoch)
+
+        # todo: log gradient values of the model
+
+        # image generation examples
+        sample = latentspace_example(model, latent_size, data_loader)
+        sample = sample.detach().numpy()
+
+        info = {'generation': sample}
+        for tag, image in info.items():
+            logger.add_image(tag, image, epoch)
+
+        # image reconstruction examples
+        comparison = reconstruction_example(model, data_loader)
+        comparison = comparison.detach().numpy()
+
+        info = {'reconstruction': comparison}
+        for tag, image in info.items():
+            logger.add_image(tag, image, epoch)
 
     if use_visdom:
         # Visdom: update training and validation loss plots
@@ -234,7 +275,7 @@ best_loss = np.inf
 
 for epoch in range(1, num_epochs + 1):
     v_loss = execute_graph(model, conditional, data_loader,
-                           loss_bce_kld, scheduler, opt, use_visdom)
+                           loss_bce_kld, scheduler, opt, use_visdom, use_tb)
 
     stop = early_stopping.step(v_loss)
 
