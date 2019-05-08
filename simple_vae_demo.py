@@ -6,12 +6,15 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.optim import Adam
 from torchvision.utils import save_image
 
+import torchvision.utils as tvu
+from tensorboardX import SummaryWriter
+
 from vae_models import CVAE
+
 
 from nn_helpers.losses import loss_bce_kld, EarlyStopping
 from nn_helpers.utils import init_weights, one_hot, to_cuda, type_tfloat, randn, eye
 from nn_helpers.visdom_grapher import VisdomGrapher
-from nn_helpers.tf_logger import TFLogger
 from nn_helpers.data import Loader
 
 
@@ -60,7 +63,7 @@ parser.add_argument('--log-interval', type=int, default=1, metavar='N',
                     help='batch interval for logging (default: 1')
 
 # Log directory
-parser.add_argument('--log-dir', type=str, default='logs',
+parser.add_argument('--log-dir', type=str, default='runs',
                     help='logging directory (default: logs)')
 
 
@@ -85,10 +88,11 @@ use_visdom = args.visdom_url is not None
 
 # Set tensorboard
 use_tb = args.log_dir is not None
+log_dir = args.log_dir
 
 # Logger
 if use_tb:
-    logger = TFLogger(args.log_dir)
+    logger = SummaryWriter()
 
 # Enable CUDA, set tensor type and device
 if args.cuda:
@@ -168,28 +172,22 @@ def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer
 
     if use_tb:
         # Training and validation loss
-        info = {'Training loss': t_loss, 'Validation loss': v_loss}
-
-        for tag, value in info.items():
-            logger.add_scalar(tag, value, epoch)
+        logger.add_scalar(log_dir + '/validation-loss', v_loss, epoch)
+        logger.add_scalar(log_dir + '/training-loss', t_loss, epoch)
 
         # todo: log gradient values of the model
 
         # image generation examples
         sample = latentspace_example(model, latent_size, data_loader)
-        sample = sample.detach().numpy()
-
-        info = {'generation': sample}
-        for tag, image in info.items():
-            logger.add_image(tag, image, epoch)
+        sample = sample.detach()
+        sample = tvu.make_grid(sample, normalize=False, scale_each=True)
+        logger.add_image('generation example', sample, epoch)
 
         # image reconstruction examples
         comparison = reconstruction_example(model, data_loader)
-        comparison = comparison.detach().numpy()
-
-        info = {'reconstruction': comparison}
-        for tag, image in info.items():
-            logger.add_image(tag, image, epoch)
+        comparison = comparison.detach()
+        comparison = tvu.make_grid(comparison, normalize=False, scale_each=True)
+        logger.add_image('reconstruction example', comparison, epoch)
 
     if use_visdom:
         # Visdom: update training and validation loss plots
@@ -299,3 +297,6 @@ save_image(sample, 'output/sample_' + str(num_epochs) + '.png')
 # Make a final reconstruction, and write to disk
 comparison = reconstruction_example(model, data_loader)
 save_image(comparison, 'output/comparison_' + str(num_epochs) + '.png')
+
+# TensorboardX logger
+logger.close()
