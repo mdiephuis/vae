@@ -9,7 +9,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 import numpy as np
 
-from nn_helpers.layers import DCGAN_Encoder, DCGAN_Decoder
+from nn_helpers.layers import DCGAN_Encoder, DCGAN_Decoder, DCGAN2_Encoder, DCGAN2_Decoder
 
 
 class VAE(nn.Module):
@@ -116,3 +116,30 @@ class INFO_VAE(nn.Module):
         z = self.encoder(x)
         x_hat = self.decoder(z)
         return z, x_hat
+
+
+class INFO_VAE2(nn.Module):
+    def __init__(self, input_shape, out_channels, encoder_size, latent_size):
+        super(INFO_VAE2, self).__init__()
+        self.encoder = DCGAN2_Encoder(input_shape, out_channels, encoder_size, latent_size)
+        self.decoder = DCGAN2_Decoder(self.encoder.H_conv_out, out_channels, encoder_size, latent_size)
+
+    def encode(self, x):
+        mu_z, std_z = self.encoder(x)
+        return mu_z, std_z
+
+    def decode(self, z):
+        x_hat = self.decoder(z)
+        return x_hat
+
+    def reparameterize(self, mu_z, std_z):
+        gauss_samples = torch.randn_like(std_z)
+        mu_train_z = gauss_samples.mul(std_z).add_(mu_z)
+        std_logdet_z = torch.mean(torch.sum(2.0 * torch.log(std_z), dim=1, keepdim=False))
+        return mu_train_z, std_logdet_z
+
+    def forward(self, x):
+        mu_z, std_z = self.encode(x)
+        mu_train_z, std_logdet_z = self.reparameterize(mu_z, std_z)
+        x_hat = self.decode(mu_train_z)
+        return x_hat, mu_train_z, std_z, std_logdet_z

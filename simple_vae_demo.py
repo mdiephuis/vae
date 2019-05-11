@@ -9,7 +9,7 @@ from torchvision.utils import save_image
 import torchvision.utils as tvu
 from tensorboardX import SummaryWriter
 
-from vae_models import CVAE
+from vae_models import INFO_VAE
 
 
 from nn_helpers.losses import loss_bce_kld, EarlyStopping
@@ -142,6 +142,7 @@ def latentspace_example(model, latent_size, data_loader):
 
 
 # save checkpoint
+
 def save_checkpoint(state, filename):
     torch.save(state, filename)
 
@@ -156,11 +157,11 @@ def get_optimizer(model):
 
 
 def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer, use_visdom, use_tb):
-    # Training los, use_tbs
+    # Training loss
     t_loss = train_validate(model, data_loader, loss_bce_kld, optimizer, conditional, train=True)
 
     # Validation loss
-    v_loss = train_validate(model, data_loader, loss_bce_kld, optimizer, conditional, train=False)
+    v_loss = train_validate(model, data_loader, loss_fn, optimizer, conditional, train=False)
 
     # Step the scheduler based on the validation loss
     scheduler.step(v_loss)
@@ -259,12 +260,16 @@ num_class = data_loader.num_class
 encoder_size = args.encoder_size
 latent_size = args.latent_size
 
-model = CVAE(input_shape, encoder_size, latent_size, num_class).type(dtype)
+# Model
+model = INFO_VAE(input_shape, encoder_size, latent_size, num_class).type(dtype)
 model.apply(init_weights)
 
 opt = get_optimizer(model)
 scheduler = ReduceLROnPlateau(opt, 'min', verbose=True)
 early_stopping = EarlyStopping('min', 0.0005, 15)
+
+# Set loss function
+loss_fn = loss_bce_kld
 
 num_epochs = args.epochs
 conditional = True
@@ -273,7 +278,7 @@ best_loss = np.inf
 
 for epoch in range(1, num_epochs + 1):
     v_loss = execute_graph(model, conditional, data_loader,
-                           loss_bce_kld, scheduler, opt, use_visdom, use_tb)
+                           loss_fn, scheduler, opt, use_visdom, use_tb)
 
     stop = early_stopping.step(v_loss)
 
@@ -285,7 +290,7 @@ for epoch in range(1, num_epochs + 1):
                         'state_dict': model.state_dict(),
                         'val_loss': v_loss
                         },
-                        'models/CVAE_{:04.4f}.pt'.format(v_loss))
+                        'models/INFOVAE_{:04.4f}.pt'.format(v_loss))
     if stop:
         print('Early stopping at epoch: {}'.format(epoch))
         break
