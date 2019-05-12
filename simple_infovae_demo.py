@@ -163,7 +163,7 @@ def get_optimizer(model):
 
 def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer, use_visdom, use_tb):
     # Training los loss_fn
-    t_loss = train_validate(model, data_loader, loss_bce_kld, optimizer, conditional, train=True)
+    t_loss = train_validate(model, data_loader, loss_fn, optimizer, conditional, train=True)
 
     # Validation loss
     v_loss = train_validate(model, data_loader, loss_fn, optimizer, conditional, train=False)
@@ -228,7 +228,7 @@ def train_validate(model, data_loader, loss_fn, optimizer, conditional, train):
         # Fix this
         x_hat, z_mu_train, std_z, z_std_logdet = model(x)
 
-        loss = loss_fn(x, x_hat, z_mu_train, std_z)
+        loss = loss_fn(x, x_hat, z_mu_train, std_z, args.alpha, args.beta)
         # loss_fn 
 
         batch_loss += loss.item() / batch_size
