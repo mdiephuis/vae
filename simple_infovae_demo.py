@@ -125,9 +125,7 @@ def reconstruction_example(model, data_loader):
 
     for _, (x, y) in enumerate(data_loader.test_loader):
         x = to_cuda(x) if args.cuda else x
-        y = one_hot(y, num_class)
-        y = y.type(type_tfloat(args.cuda))
-        x_hat, _, _ = model(x, y)
+        x_hat, _, _, _ = model(x)
         break
 
     x = x[:num_class].cpu().view(num_class * img_shape[0], img_shape[1])
@@ -141,8 +139,7 @@ def latentspace_example(model, latent_size, data_loader):
     img_shape = data_loader.img_shape[1:]
 
     draw = randn((num_class, latent_size), args.cuda)
-    label = eye(num_class, args.cuda)
-    sample = model.decode(draw, label).cpu().view(num_class, 1, img_shape[0], img_shape[1])
+    sample = model.decode(draw).cpu().view(num_class, 1, img_shape[0], img_shape[1])
     return sample
 
 
