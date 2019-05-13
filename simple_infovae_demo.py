@@ -41,11 +41,11 @@ parser.add_argument('--beta', type=float, default=51.0, metavar='N',
 
 
 # data loader parameters
-parser.add_argument('--dataset-name', type=str, default=None,
+parser.add_argument('--dataset-name', type=str, default='mnist',
                     help='Name of dataset (default: none')
-parser.add_argument('--data-dir', type=str, default=None,
+parser.add_argument('--data-dir', type=str, default='data/',
                     help='directory to load data from (default: none')
-parser.add_argument('--download-data', action='store_true', default=False,
+parser.add_argument('--download-data', action='store_true', default=True,
                     help='Automatically download dataset (default: false)')
 parser.add_argument('--batch-size', type=int, default=23, metavar='N',
                     help='input training batch-size')
@@ -118,16 +118,16 @@ if args.seed is not None:
 
 
 def reconstruction_example(model, data_loader):
-
+    
     model.eval()
     num_class = data_loader.num_class
     img_shape = data_loader.img_shape[1:]
-
+    
     for _, (x, y) in enumerate(data_loader.test_loader):
         x = to_cuda(x) if args.cuda else x
-        x_hat, _, _, _ = model(x)
+        x_hat, _, _,_ = model(x)
         break
-
+    
     x = x[:num_class].cpu().view(num_class * img_shape[0], img_shape[1])
     x_hat = x_hat[:num_class].cpu().view(num_class * img_shape[0], img_shape[1])
     comparison = torch.cat((x, x_hat), 1).view(num_class * img_shape[0], 2 * img_shape[1])
@@ -137,7 +137,7 @@ def reconstruction_example(model, data_loader):
 def latentspace_example(model, latent_size, data_loader):
     num_class = data_loader.num_class
     img_shape = data_loader.img_shape[1:]
-
+    
     draw = randn((num_class, latent_size), args.cuda)
     sample = model.decode(draw).cpu().view(num_class, 1, img_shape[0], img_shape[1])
     return sample
@@ -161,97 +161,97 @@ def get_optimizer(model):
 def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer, use_visdom, use_tb):
     # Training los loss_fn
     t_loss = train_validate(model, data_loader, loss_fn, optimizer, conditional, train=True)
-
+    
     # Validation loss
     v_loss = train_validate(model, data_loader, loss_fn, optimizer, conditional, train=False)
-
+    
     # Step the scheduler based on the validation loss
     scheduler.step(v_loss)
-
+    
     print('====> Epoch: {} Average Train loss: {:.4f}'.format(epoch, t_loss))
     print('====> Epoch: {} Average Validation loss: {:.4f}'.format(epoch, v_loss))
-
+    
     if use_tb:
         # Training and validation loss
         logger.add_scalar(log_dir + '/validation-loss', v_loss, epoch)
         logger.add_scalar(log_dir + '/training-loss', t_loss, epoch)
-
+        
         # todo: log gradient values of the model
-
+        
         # image generation examples
         sample = latentspace_example(model, latent_size, data_loader)
         sample = sample.detach()
         sample = tvu.make_grid(sample, normalize=False, scale_each=True)
         logger.add_image('generation example', sample, epoch)
-
+        
         # image reconstruction examples
         comparison = reconstruction_example(model, data_loader)
         comparison = comparison.detach()
         comparison = tvu.make_grid(comparison, normalize=False, scale_each=True)
         logger.add_image('reconstruction example', comparison, epoch)
-
+    
     if use_visdom:
         # Visdom: update training and validation loss plots
-        vis.add_scalar(t_loss, epoch, 'Training loss', idtag='train')
-        vis.add_scalar(v_loss, epoch, 'Validation loss', idtag='valid')
-
+        vis.add_scalar('Training loss', idtag='train', y=t_loss, x=epoch)
+        vis.add_scalar('Validation loss', idtag='valid', y=v_loss, x=epoch)
+        
         # Visdom: Show generated images
         sample = latentspace_example(model, latent_size, data_loader)
         sample = sample.detach().numpy()
         vis.add_image('Generated sample ' + str(epoch), 'generated', sample)
-
+        
         # Visdom: Show example reconstruction from the test set
         comparison = reconstruction_example(model, data_loader)
         comparison = comparison.detach().numpy()
         vis.add_image(comparison, 'Reconstruction sample ' + str(epoch), 'recon')
-
-    return v_loss
+    
+            return v_loss
 
 
 def train_validate(model, data_loader, loss_fn, optimizer, conditional, train):
     model.train() if train else model.eval()
     loader = data_loader.train_loader if train else data_loader.test_loader
-
+    
     batch_loss = 0
     batch_size = data_loader.batch_size
     num_class = data_loader.num_class
-
+    
     for batch_idx, (x, y) in enumerate(loader):
         loss = 0
         x = to_cuda(x) if args.cuda else x
         if train:
             opt.zero_grad()
-
+    
         # Fix this
-        x_hat, z_mu_train, std_z, z_std_logdet = model(x)
-
-        loss = loss_fn(x, x_hat, z_mu_train, std_z, args.alpha, args.beta)
-        # loss_fn 
-
+        x_hat, z_mu_train, std_z , z  = model(x)
+        
+        loss = loss_fn(x, x_hat, z_mu_train, std_z, z, args.alpha, args.beta,args.cuda)
+        # loss_fn
+        
         batch_loss += loss.item() / batch_size
-
+        
         if train:
             loss.backward()
             optimizer.step()
-    # collect better stats
-    return batch_loss / (batch_idx + 1)
+# collect better stats
+                return batch_loss / (batch_idx + 1)
 
 
 """
-Visdom init
-"""
+    Visdom init
+    """
 if use_visdom:
     vis = VisdomGrapher(args.uid, args.visdom_url, args.visdom_port)
 
 """
-Get the dataloader
-"""
+    Get the dataloader
+    """
 data_loader = Loader(args.dataset_name, args.data_dir, args.download_data, True, args.batch_size, None, None, args.cuda)
 
 
 """
-Model parameters
-"""
+    Model parameters
+    """
 input_shape = data_loader.img_shape
 num_class = data_loader.num_class
 encoder_size = args.encoder_size
@@ -279,21 +279,21 @@ best_loss = np.inf
 for epoch in range(1, num_epochs + 1):
     v_loss = execute_graph(model, conditional, data_loader,
                            loss_fn, scheduler, opt, use_visdom, use_tb)
-
-    stop = early_stopping.step(v_loss)
-
-    if v_loss < best_loss or stop:
-        best_loss = v_loss
-        print('Writing model checkpoint')
-        save_checkpoint({
-                        'epoch': epoch + 1,
-                        'state_dict': model.state_dict(),
-                        'val_loss': v_loss
-                        },
-                        'models/INFOVAE_{:04.4f}.pt'.format(v_loss))
-    if stop:
-        print('Early stopping at epoch: {}'.format(epoch))
-        break
+        
+                           stop = early_stopping.step(v_loss)
+                           
+                           if v_loss < best_loss or stop:
+                               best_loss = v_loss
+                                   print('Writing model checkpoint')
+                                   save_checkpoint({
+                                                   'epoch': epoch + 1,
+                                                   'state_dict': model.state_dict(),
+                                                   'val_loss': v_loss
+                                                   },
+                                                   'models/INFOVAE_{:04.4f}.pt'.format(v_loss))
+                               if stop:
+                                   print('Early stopping at epoch: {}'.format(epoch))
+                                   break
 
 # Write a final sample to disk
 sample = latentspace_example(model, latent_size, data_loader)
@@ -305,3 +305,4 @@ save_image(comparison, 'output/comparison_' + str(num_epochs) + '.png')
 
 # TensorboardX logger
 logger.close()
+
