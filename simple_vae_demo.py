@@ -9,7 +9,7 @@ from torchvision.utils import save_image
 import torchvision.utils as tvu
 from tensorboardX import SummaryWriter
 
-from vae_models import INFO_VAE
+from vae_models import CVAE
 
 
 from nn_helpers.losses import loss_bce_kld, EarlyStopping
@@ -158,7 +158,7 @@ def get_optimizer(model):
 
 def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer, use_visdom, use_tb):
     # Training loss
-    t_loss = train_validate(model, data_loader, loss_bce_kld, optimizer, conditional, train=True)
+    t_loss = train_validate(model, data_loader, loss_fn, optimizer, conditional, train=True)
 
     # Validation loss
     v_loss = train_validate(model, data_loader, loss_fn, optimizer, conditional, train=False)
@@ -192,13 +192,13 @@ def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer
 
     if use_visdom:
         # Visdom: update training and validation loss plots
-        vis.add_scalar('Training loss', idtag='train', y=t_loss, x=epoch)
-        vis.add_scalar('Validation loss', idtag='valid', y=v_loss, x=epoch)
+        vis.add_scalar(t_loss, epoch, 'Training loss', idtag='train')
+        vis.add_scalar(v_loss, epoch, 'Validation loss', idtag='valid')
 
         # Visdom: Show generated images
         sample = latentspace_example(model, latent_size, data_loader)
         sample = sample.detach().numpy()
-        vis.add_image('Generated sample ' + str(epoch), 'generated', sample)
+        vis.add_image(sample, 'Generated sample ' + str(epoch), 'generated')
 
         # Visdom: Show example reconstruction from the test set
         comparison = reconstruction_example(model, data_loader)
@@ -261,7 +261,7 @@ encoder_size = args.encoder_size
 latent_size = args.latent_size
 
 # Model
-model = INFO_VAE(input_shape, encoder_size, latent_size, num_class).type(dtype)
+model = CVAE(input_shape, encoder_size, latent_size, num_class).type(dtype)
 model.apply(init_weights)
 
 opt = get_optimizer(model)
