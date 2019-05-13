@@ -288,20 +288,20 @@ for epoch in range(1, num_epochs + 1):
     v_loss = execute_graph(model, conditional, data_loader,
                            loss_fn, scheduler, opt, use_visdom, use_tb)
 
-        stop = early_stopping.step(v_loss)
+    stop = early_stopping.step(v_loss)
 
-        if v_loss < best_loss or stop:
-            best_loss = v_loss
-                print('Writing model checkpoint')
-                save_checkpoint({
-                                'epoch': epoch + 1,
-                                'state_dict': model.state_dict(),
-                                'val_loss': v_loss
-                                },
-                                'models/INFOVAE_{:04.4f}.pt'.format(v_loss))
-            if stop:
-                print('Early stopping at epoch: {}'.format(epoch))
-                break
+    if v_loss < best_loss or stop:
+        best_loss = v_loss
+        print('Writing model checkpoint')
+        save_checkpoint({
+                        'epoch': epoch + 1,
+                        'state_dict': model.state_dict(),
+                        'val_loss': v_loss
+                        },
+                        'models/INFOVAE_{:04.4f}.pt'.format(v_loss))
+    if stop:
+        print('Early stopping at epoch: {}'.format(epoch))
+        break
 
 # Write a final sample to disk
 sample = latentspace_example(model, latent_size, data_loader)
