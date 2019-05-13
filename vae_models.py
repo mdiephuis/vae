@@ -143,3 +143,40 @@ class INFO_VAE2(nn.Module):
         mu_train_z, std_logdet_z = self.reparameterize(mu_z, std_z)
         x_hat = self.decode(mu_train_z)
         return x_hat, mu_train_z, std_z, std_logdet_z
+
+
+class PlanarFlow(nn.Module):
+    def __init__(self, input_shape):
+        super(PlanarFlow, self).__init__()
+        self.input_shape = np.prod(input_shape)
+        self.scale = nn.Parameter(torch.Tensor(1, input_shape))
+        self.weight = nn.Parameter(torch.Tensor(1, input_shape))
+        self.bias = nn.Parameter(torch.Tensor(1))
+
+    def forward(self, z):
+        f_z = nn.linear(z, self.weight, self.bias)
+        return z + self.scale * torch.tanh(f_z)
+
+    def log_abs_det_jacobian(self, z):
+        f_z = nn.linear(z, self.weight, self.bias)
+        psi = (1 - torch.tanh(f_z) ** 2) * self.weight
+        det_grad = 1 + torch.mm(psi, self.scale.t())
+        log_det_grad = torch.log(det_grad.abs() + 1e-9)
+        return log_det_grad
+
+
+class RadialFlow(nn.Module):
+    def __init__(self, input_shape):
+        super(RadialFlow, self).__init__()
+        self.input_shape = np.prod(input_shape)
+        self.alpha = nn.Parameter(torch.Tensor(1))
+        self.beta = nn.Parameter(torch.Tensor(1))
+        self.z0 = nn.Parameter(torch.Tensor(1, input_shape))
+
+    def forward(self, z):
+        r = torch.norm(z - self.z0, dim=1).unsqueeze(1)
+        h = 1. / (self.alpha + r)
+        return z + (self.beta * h * (z - self.z0))
+
+    def log_abs_det_jacobian(self, z):
+        
