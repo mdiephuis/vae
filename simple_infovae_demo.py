@@ -125,14 +125,12 @@ def reconstruction_example(model, data_loader):
 
     for _, (x, y) in enumerate(data_loader.test_loader):
         x = to_cuda(x) if args.cuda else x
-        x_hat, _, _, _ = model(x)
+        x_hat, _, _, = model(x)
         break
 
     x = x[:num_class].cpu().view(num_class * img_shape[0], img_shape[1])
-    x_hat = x_hat[:num_class].cpu().view(
-        num_class * img_shape[0], img_shape[1])
-    comparison = torch.cat((x, x_hat), 1).view(
-        num_class * img_shape[0], 2 * img_shape[1])
+    x_hat = x_hat[:num_class].cpu().view(num_class * img_shape[0], img_shape[1])
+    comparison = torch.cat((x, x_hat), 1).view(num_class * img_shape[0], 2 * img_shape[1])
     return comparison
 
 
@@ -141,8 +139,7 @@ def latentspace_example(model, latent_size, data_loader):
     img_shape = data_loader.img_shape[1:]
 
     draw = randn((num_class, latent_size), args.cuda)
-    sample = model.decode(draw).cpu().view(
-        num_class, 1, img_shape[0], img_shape[1])
+    sample = model.decode(draw).cpu().view(num_class, 1, img_shape[0], img_shape[1])
     return sample
 
 
@@ -190,8 +187,7 @@ def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer
         # image reconstruction examples
         comparison = reconstruction_example(model, data_loader)
         comparison = comparison.detach()
-        comparison = tvu.make_grid(
-            comparison, normalize=False, scale_each=True)
+        comparison = tvu.make_grid(comparison, normalize=False, scale_each=True)
         logger.add_image('reconstruction example', comparison, epoch)
 
     if use_visdom:
@@ -227,12 +223,9 @@ def train_validate(model, data_loader, loss_fn, optimizer, conditional, train):
         if train:
             opt.zero_grad()
 
-        # Fix this
-        x_hat, z_mu_train, std_z, z = model(x)
+        x_hat, mu_z, std_z = model(x)
 
-        loss = loss_fn(x, x_hat, z_mu_train, std_z, z,
-                       args.alpha, args.beta, args.cuda)
-        # loss_fn
+        loss = loss_fn(x, x_hat, mu_z, std_z, args.alpha, args.beta, args.cuda)
 
         batch_loss += loss.item() / batch_size
 
