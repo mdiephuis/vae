@@ -178,4 +178,30 @@ class RadialFlow(nn.Module):
         return z + (self.beta * h * (z - self.z0))
 
     def log_abs_det_jacobian(self, z):
-        return
+        r = torch.norm(z - self.z0, dim=1).unsqueeze(1)
+        h = 1. / (self.alpha + r)
+        dh = -1. / (self.alpha + r) ** 2
+        base = 1 + self.beta * h
+        det_grad = (base ** self.dim - 1) * (base + self.beta * dh * r)
+        log_det_grad = torch.log(det_grad.abs() + 1e-9)
+        return log_det_grad
+
+
+class NormalizingFlow(nn.Module):
+    def __init__(self, input_shape, f_blocks, length_flow):
+        super(NormalizingFlow, self).__init__()
+        self.input_shape = np.prod(input_shape)
+        bijector_list = []
+        for f in range(length_flow):
+            for f_block in f_blocks:
+                bijector_list.append(f_block(input_shape))
+
+        self.bijectors = nn.ModuleList(bijector_list)
+        self.log_det = []
+
+    def forward(self, z):
+        self.log_det = []
+        for b in range(len(self.bijectors)):
+            self.log_det.append(self.bijectors[b].log_abs_det_jacobian(z))
+            z = self.bijectors[b](z)
+        return z, self.log_det
