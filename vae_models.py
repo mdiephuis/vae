@@ -133,13 +133,12 @@ class INFO_VAE2(nn.Module):
         return x_hat
 
     def reparameterize(self, mu_z, std_z):
-        gauss_samples = torch.randn_like(std_z)
-        mu_train_z = gauss_samples.mul(std_z).add_(mu_z)
-        std_logdet_z = torch.mean(torch.sum(2.0 * torch.log(std_z), dim=1, keepdim=False))
-        return mu_train_z, std_logdet_z
+        #std = torch.exp(0.5 * std_z)
+        eps = torch.randn_like(std_z)
+        return mu_z + eps * std_z
 
     def forward(self, x):
         mu_z, std_z = self.encode(x)
-        mu_train_z, std_logdet_z = self.reparameterize(mu_z, std_z)
+        z = self.reparameterize(mu_z, std_z)
         x_hat = self.decode(mu_train_z)
-        return x_hat, mu_train_z, std_z, std_logdet_z
+        return x_hat, mu_z, std_z, z
