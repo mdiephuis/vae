@@ -192,8 +192,8 @@ def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer
 
     if use_visdom:
         # Visdom: update training and validation loss plots
-        vis.add_scalar('Training loss', idtag='train', y=t_loss, x=epoch)
-        vis.add_scalar('Validation loss', idtag='valid', y=v_loss, x=epoch)
+        vis.add_scalar(t_loss, epoch, 'Training loss', idtag='train')
+        vis.add_scalar(v_loss, epoch, 'Validation loss', idtag='valid')
 
         # Visdom: Show generated images
         sample = latentspace_example(model, latent_size, data_loader)
