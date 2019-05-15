@@ -31,9 +31,9 @@ class VAE(nn.Module):
 
     def encode(self, x):
         h1 = F.relu(self.fc1(x))
-        h2_1 = self.fc2_1(h1)
-        h2_2 = self.fc2_2(h1)
-        return h2_1, h2_2
+        mu = self.fc2_1(h1)
+        log_var = self.fc2_2(h1)
+        return mu, log_var
 
     def reparameterize(self, mu, log_var):
         std = torch.exp(0.5 * log_var)

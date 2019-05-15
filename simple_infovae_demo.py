@@ -265,7 +265,7 @@ for epoch in range(1, num_epochs + 1):
         break
 
 # Write a final sample to disk
-sample = latentspace_example(model, latent_size, data_loader, args.cuda)
+sample = latentspace_example(model, latent_size, data_loader, conditional, args.cuda)
 save_image(sample, 'output/sample_' + str(num_epochs) + '.png')
 
 # Make a final reconstruction, and write to disk

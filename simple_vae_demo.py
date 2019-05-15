@@ -235,7 +235,7 @@ model.apply(init_weights)
 
 opt = get_optimizer(model)
 scheduler = ReduceLROnPlateau(opt, 'min', verbose=True)
-early_stopping = EarlyStopping('min', 0.0005, 15)
+early_stopping = EarlyStopping('min', 0.0005, 25)
 
 # Set loss function
 loss_fn = loss_bce_kld
@@ -265,7 +265,7 @@ for epoch in range(1, num_epochs + 1):
 
 
 # Write a final sample to disk
-sample = latentspace_example(model, latent_size, data_loader, args.cuda)
+sample = latentspace_example(model, latent_size, data_loader, conditional, args.cuda)
 save_image(sample, 'output/sample_' + str(num_epochs) + '.png')
 
 # Make a final reconstruction, and write to disk
