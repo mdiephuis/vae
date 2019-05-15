@@ -31,7 +31,7 @@ parser.add_argument('--conditional', action='store_true', default=False,
 parser.add_argument('--latent-size', type=int, default=20, metavar='N',
                     help='VAE latent size (default: 20')
 
-parser.add_argument('--encoder-size', type=int, default=200, metavar='N',
+parser.add_argument('--encoder-size', type=int, default=512, metavar='N',
                     help='VAE encoder size (default: 200')
 
 # data loader parameters

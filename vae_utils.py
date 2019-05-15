@@ -1,7 +1,5 @@
 import torch
-import numpy as np
-
-from nn_helpers.utils import init_weights, one_hot, to_cuda, type_tfloat, randn, eye
+from nn_helpers.utils import one_hot, to_cuda, type_tfloat, randn, eye
 
 
 def reconstruction_example(model, data_loader, conditional, use_cuda):
