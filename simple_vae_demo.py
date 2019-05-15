@@ -27,7 +27,7 @@ parser.add_argument('--uid', type=str, default='VAE',
 # Model parameters
 
 parser.add_argument('--conditional', action='store_true', default=False,
-                    help='Enable CVAE')
+                    help='Enable CVAE (default: False)')
 parser.add_argument('--latent-size', type=int, default=20, metavar='N',
                     help='VAE latent size (default: 20')
 
@@ -212,7 +212,8 @@ if use_visdom:
 """
 Get the dataloader
 """
-data_loader = Loader(args.dataset_name, args.data_dir, args.download_data, True, args.batch_size, None, None, args.cuda)
+data_loader = Loader(args.dataset_name, args.data_dir, args.download_data,
+                     True, args.batch_size, None, None, args.cuda)
 
 
 """

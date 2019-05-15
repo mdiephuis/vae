@@ -22,7 +22,7 @@ class VAE(nn.Module):
         self.input_shape = np.prod(list(input_shape))
         self.encoder_size = encoder_size
         self.latent_size = latent_size
-        # tensor defs here
+
         self.fc1 = nn.Linear(self.input_shape, self.encoder_size)
         self.fc2_1 = nn.Linear(self.encoder_size, self.latent_size)
         self.fc2_2 = nn.Linear(self.encoder_size, self.latent_size)
@@ -36,13 +36,10 @@ class VAE(nn.Module):
         return h2_1, h2_2
 
     def reparameterize(self, mu, log_var):
-        if self.training:
-            std = torch.exp(0.5 * log_var)
-            eps = torch.randn_like(std)
-            draw = eps.mul(std).add_(mu)
-            return draw
-        else:
-            return mu
+        std = torch.exp(0.5 * log_var)
+        eps = torch.randn_like(std)
+        z = eps.mul(std).add_(mu)
+        return z
 
     def decode(self, z):
         h3 = F.relu(self.fc3(z))
@@ -67,7 +64,6 @@ class CVAE(nn.Module):
         self.latent_size = latent_size
         self.num_class = num_class
 
-        # tensor defs
         self.fc1 = nn.Linear(self.input_shape + self.num_class, self.encoder_size)
         self.fc2_1 = nn.Linear(self.encoder_size, self.latent_size)
         self.fc2_2 = nn.Linear(self.encoder_size, self.latent_size)
@@ -82,13 +78,10 @@ class CVAE(nn.Module):
         return mu, log_var
 
     def reparameterize(self, mu, log_var):
-        if self.training:
-            std = torch.exp(0.5 * log_var)
-            eps = torch.randn_like(std)
-            draw = eps.mul(std).add_(mu)
-            return draw
-        else:
-            return mu
+        std = torch.exp(0.5 * log_var)
+        eps = torch.randn_like(std)
+        z = eps.mul(std).add_(mu)
+        return z
 
     def decode(self, z, y):
         z_cond = torch.cat((z, y), 1)
