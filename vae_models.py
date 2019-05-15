@@ -17,7 +17,7 @@ class VAE(nn.Module):
     Simple VAE model
     """
 
-    def __init__(self, input_shape, encoder_size, latent_size):
+    def __init__(self, input_shape, encoder_size, latent_size, num_class=None):
         super(VAE, self).__init__()
         self.input_shape = np.prod(list(input_shape))
         self.encoder_size = encoder_size
@@ -46,7 +46,7 @@ class VAE(nn.Module):
 
     def decode(self, z):
         h3 = F.relu(self.fc3(z))
-        output = F.sigmoid(self.fc4(h3))
+        output = torch.sigmoid(self.fc4(h3))
         return output
 
     def forward(self, x):
@@ -204,3 +204,69 @@ class NormalizingFlow(nn.Module):
             self.log_det.append(self.bijectors[b].log_abs_det_jacobian(z))
             z = self.bijectors[b](z)
         return z, self.log_det
+
+
+class FVAE(nn.Module):
+    def __init__(self, input_shape, encoder_size, decoder_size, latent_size):
+        super(FVAE, self).__init__()
+        self.input_shape = np.prod(list(input_shape))
+        self.encoder_size = encoder_size
+        self.decoder_size = decoder_size
+        self.latent_size = latent_size
+
+        self.encoder = nn.ModuleList([
+            nn.Linear(self.input_shape, encoder_size),
+            nn.ReLU(True),
+            nn.Linear(self.encoder_size, self.encoder_size // 2),
+            nn.ReLU(True),
+            nn.Linear(self.encoder_size // 2, self.encoder_size // 2)
+        ])
+
+        self.decoder = nn.ModuleList([
+            nn.Linear(self.latent_size, self.decoder_size // 2),
+            nn.ReLU(True),
+            nn.Linear(self.decoder_size // 2, self.decoder_size),
+            nn.ReLU(True),
+            nn.Linear(self.decoder_size, self.input_shape),
+            nn.Sigmoid()
+        ])
+
+        self.encoder_mu = nn.Linear(self.encoder_size // 2, latent_size)
+        self.encoder_std = nn.ModuleList([
+            nn.Linear(self.encoder_size // 2, latent_size),
+            nn.Softplus(),
+            nn.Hardtanh(min_val=1e-4, max_val=5.)
+        ])
+
+    def encode(self, x):
+        for layer in self.encoder:
+            x = layer(x)
+
+        mu = self.encoder_mu(x)
+
+        std = x
+        for layer in self.encoder_std:
+            std = layer(std)
+
+        return mu, std
+
+    def reparameterize(self, mu, std):
+        if self.training:
+            # std = torch.exp(0.5 * log_var)
+            eps = torch.randn_like(std)
+            z = eps.mul(std).add_(mu)
+            return z
+        else:
+            return mu
+
+    def decode(self, z):
+        x_hat = z
+        for layer in self.decoder:
+            x_hat = layer(x_hat)
+        return x_hat
+
+    def forward(self, x):
+        mu, std = self.encode(x.view(-1, self.input_shape))
+        z = self.reparameterize(mu, std)
+        x_hat = self.decode(z)
+        return x_hat, mu, std

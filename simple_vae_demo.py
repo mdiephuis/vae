@@ -9,8 +9,8 @@ from torchvision.utils import save_image
 import torchvision.utils as tvu
 from tensorboardX import SummaryWriter
 
-from vae_models import CVAE
-
+from vae_models import CVAE, VAE, FVAE
+from vae_utils import reconstruction_example, latentspace_example, save_checkpoint
 
 from nn_helpers.losses import loss_bce_kld, EarlyStopping
 from nn_helpers.utils import init_weights, one_hot, to_cuda, type_tfloat, randn, eye
@@ -18,7 +18,7 @@ from nn_helpers.visdom_grapher import VisdomGrapher
 from nn_helpers.data import Loader
 
 
-parser = argparse.ArgumentParser(description='VAE example')
+parser = argparse.ArgumentParser(description='CVAE example')
 
 # Task parameters
 parser.add_argument('--uid', type=str, default='VAE',
@@ -26,7 +26,7 @@ parser.add_argument('--uid', type=str, default='VAE',
 
 # Model parameters
 
-parser.add_argument('--conditional', action='store_true', default=True,
+parser.add_argument('--conditional', action='store_true', default=False,
                     help='Enable CVAE')
 parser.add_argument('--latent-size', type=int, default=20, metavar='N',
                     help='VAE latent size (default: 20')
@@ -46,8 +46,6 @@ parser.add_argument('--batch-size', type=int, default=23, metavar='N',
 
 
 # Optimizer
-parser.add_argument('--optimizer', type=str, default="adam",
-                    help='Optimizer (default: Adam')
 parser.add_argument('--epochs', type=int, default=25, metavar='N',
                     help='number of training epochs')
 
@@ -112,41 +110,6 @@ if args.seed is not None:
         torch.cuda.manual_seed(args.seed)
 
 
-def reconstruction_example(model, data_loader):
-
-    model.eval()
-    num_class = data_loader.num_class
-    img_shape = data_loader.img_shape[1:]
-
-    for _, (x, y) in enumerate(data_loader.test_loader):
-        x = to_cuda(x) if args.cuda else x
-        y = one_hot(y, num_class)
-        y = y.type(type_tfloat(args.cuda))
-        x_hat, _, _ = model(x, y)
-        break
-
-    x = x[:num_class].cpu().view(num_class * img_shape[0], img_shape[1])
-    x_hat = x_hat[:num_class].cpu().view(num_class * img_shape[0], img_shape[1])
-    comparison = torch.cat((x, x_hat), 1).view(num_class * img_shape[0], 2 * img_shape[1])
-    return comparison
-
-
-def latentspace_example(model, latent_size, data_loader):
-    num_class = data_loader.num_class
-    img_shape = data_loader.img_shape[1:]
-
-    draw = randn((num_class, latent_size), args.cuda)
-    label = eye(num_class, args.cuda)
-    sample = model.decode(draw, label).cpu().view(num_class, 1, img_shape[0], img_shape[1])
-    return sample
-
-
-# save checkpoint
-
-def save_checkpoint(state, filename):
-    torch.save(state, filename)
-
-
 def get_optimizer(model):
     lr = 1e-3
     beta1 = 0.9
@@ -179,13 +142,13 @@ def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer
         # todo: log gradient values of the model
 
         # image generation examples
-        sample = latentspace_example(model, latent_size, data_loader)
+        sample = latentspace_example(model, latent_size, data_loader, conditional, args.cuda)
         sample = sample.detach()
         sample = tvu.make_grid(sample, normalize=False, scale_each=True)
         logger.add_image('generation example', sample, epoch)
 
         # image reconstruction examples
-        comparison = reconstruction_example(model, data_loader)
+        comparison = reconstruction_example(model, data_loader, conditional, args.cuda)
         comparison = comparison.detach()
         comparison = tvu.make_grid(comparison, normalize=False, scale_each=True)
         logger.add_image('reconstruction example', comparison, epoch)
@@ -196,12 +159,12 @@ def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer
         vis.add_scalar(v_loss, epoch, 'Validation loss', idtag='valid')
 
         # Visdom: Show generated images
-        sample = latentspace_example(model, latent_size, data_loader)
+        sample = latentspace_example(model, latent_size, data_loader, conditional, args.cuda)
         sample = sample.detach().numpy()
         vis.add_image(sample, 'Generated sample ' + str(epoch), 'generated')
 
         # Visdom: Show example reconstruction from the test set
-        comparison = reconstruction_example(model, data_loader)
+        comparison = reconstruction_example(model, data_loader, conditional, args.cuda)
         comparison = comparison.detach().numpy()
         vis.add_image(comparison, 'Reconstruction sample ' + str(epoch), 'recon')
 
@@ -259,9 +222,14 @@ input_shape = data_loader.img_shape
 num_class = data_loader.num_class
 encoder_size = args.encoder_size
 latent_size = args.latent_size
+conditional = args.conditional
 
 # Model
-model = CVAE(input_shape, encoder_size, latent_size, num_class).type(dtype)
+if conditional:
+    model = CVAE(input_shape, encoder_size, latent_size, num_class).type(dtype)
+else:
+    model = VAE(input_shape, encoder_size, latent_size, num_class).type(dtype)
+
 model.apply(init_weights)
 
 opt = get_optimizer(model)
@@ -272,7 +240,6 @@ early_stopping = EarlyStopping('min', 0.0005, 15)
 loss_fn = loss_bce_kld
 
 num_epochs = args.epochs
-conditional = True
 best_loss = np.inf
 # Main training and validation loop
 
@@ -290,17 +257,18 @@ for epoch in range(1, num_epochs + 1):
                         'state_dict': model.state_dict(),
                         'val_loss': v_loss
                         },
-                        'models/INFOVAE_{:04.4f}.pt'.format(v_loss))
+                        'models/CVAE_{:04.4f}.pt'.format(v_loss))
     if stop:
         print('Early stopping at epoch: {}'.format(epoch))
         break
 
+
 # Write a final sample to disk
-sample = latentspace_example(model, latent_size, data_loader)
+sample = latentspace_example(model, latent_size, data_loader, args.cuda)
 save_image(sample, 'output/sample_' + str(num_epochs) + '.png')
 
 # Make a final reconstruction, and write to disk
-comparison = reconstruction_example(model, data_loader)
+comparison = reconstruction_example(model, data_loader, conditional, args.cuda)
 save_image(comparison, 'output/comparison_' + str(num_epochs) + '.png')
 
 # TensorboardX logger
