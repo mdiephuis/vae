@@ -294,5 +294,12 @@ if args.latent_size == 2:
     plt.savefig('output/InfoVAE_z_cluster.png')
     plt.close(fig)
 
+    latent_space = latentspace2d_example(model, data_loader, args.cuda)
+    fig = plt.figure()
+    plt.imshow(latent_space)
+    plt.tight_layout()
+    plt.savefig('output/InfoVAE_z_space.png')
+    plt.close(fig)
+
 # TensorboardX logger
 logger.close()

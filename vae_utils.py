@@ -40,7 +40,28 @@ def generation_example(model, latent_size, data_loader, conditional, use_cuda):
 
 
 def latentspace2d_example(model, data_loader, use_cuda):
-    return
+    model.eval()
+    num_x, num_y = 20, 20
+    n_class = data_loader.num_class
+    img_shape = data_loader.img_shape[1:]
+    batch_size = data_loader.batch_size
+
+    x_values = np.linspace(-3, -3, num_x)
+    y_values = np.linspace(-3, -3, num_y)
+
+    canvas = np.empty((num_y * img_shape[0], num_y * img_shape[1]))
+    for i, yi in enumerate(x_values):
+        for j, xi in enumerate(y_values):
+            draw = torch.from_numpy(np.array([[np.float(xi), np.float(yi)]] * batch_size))
+            draw = draw.type(type_tfloat(use_cuda))
+
+            x_hat = model.decode(draw).cpu().detach().numpy()
+            x_hat = x_hat[0].reshape(img_shape[0], img_shape[1])
+
+            canvas[(num_x - i - 1) * img_shape[1]:(num_x - i) * img_shape[1],
+                   j * img_shape[1]:(j + 1) * img_shape[1]] = x_hat
+
+    return canvas
 
 
 def latentcluster2d_example(model, data_loader, use_cuda):
