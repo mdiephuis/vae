@@ -9,6 +9,10 @@ from torchvision.utils import save_image
 import torchvision.utils as tvu
 from tensorboardX import SummaryWriter
 
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+mpl.use('Agg')
+
 from vae_models import INFO_VAE2
 from vae_utils import reconstruction_example, generation_example, latentspace2d_example, save_checkpoint
 
@@ -159,12 +163,6 @@ def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer
         comparison = tvu.make_grid(comparison, normalize=False, scale_each=True)
         logger.add_image('reconstruction example', comparison, epoch)
 
-                # latent space scatter example
-        if args.latent_size == 2:
-            z, labels = latentspace2d_example(model, data_loader, args.use_cuda)
-            
-
-
     if use_visdom:
         # Visdom: update training and validation loss plots
         vis.add_scalar(t_loss, epoch, 'Training loss', idtag='train')
@@ -198,8 +196,6 @@ def train_validate(model, data_loader, loss_fn, optimizer, conditional, train):
             opt.zero_grad()
 
         x_hat, mu_z, std_z = model(x)
-
-        print(mu_z.size())
 
         loss = loss_fn(x, x_hat, mu_z, std_z, args.alpha, args.beta, args.cuda)
 
@@ -281,7 +277,13 @@ save_image(sample, 'output/sample_' + str(num_epochs) + '.png')
 comparison = reconstruction_example(model, data_loader, conditional, args.cuda)
 save_image(comparison, 'output/comparison_' + str(num_epochs) + '.png')
 
-# 
+# latent space scatter example
+if args.latent_size == 2:
+    z, labels = latentspace2d_example(model, data_loader, args.use_cuda)
+    fig = plt.figure()
+    plt.scatter(z[:, 0], z[:, 1], c=labels)
+    plt.savefig('output/InfoVAE_z_cluster.png')
+    plt.close(fig)
 
 # TensorboardX logger
 logger.close()
