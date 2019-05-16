@@ -272,5 +272,7 @@ save_image(sample, 'output/sample_' + str(num_epochs) + '.png')
 comparison = reconstruction_example(model, data_loader, conditional, args.cuda)
 save_image(comparison, 'output/comparison_' + str(num_epochs) + '.png')
 
+# 
+
 # TensorboardX logger
 logger.close()
