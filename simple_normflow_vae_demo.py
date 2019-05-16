@@ -10,7 +10,7 @@ import torchvision.utils as tvu
 from tensorboardX import SummaryWriter
 
 from vae_models import INFO_VAE2
-from vae_utils import reconstruction_example, latentspace_example, save_checkpoint
+from vae_utils import reconstruction_example, generation_example, save_checkpoint
 
 from nn_helpers.losses import loss_bce_kld, EarlyStopping, loss_infovae
 from nn_helpers.utils import init_weights, one_hot, to_cuda, type_tfloat, randn, eye
@@ -146,7 +146,7 @@ def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer
         # todo: log gradient values of the model
 
         # image generation examples
-        sample = latentspace_example(model, latent_size, data_loader, conditional, args.cuda)
+        sample = generation_example(model, latent_size, data_loader, conditional, args.cuda)
         sample = sample.detach()
         sample = tvu.make_grid(sample, normalize=False, scale_each=True)
         logger.add_image('generation example', sample, epoch)
@@ -157,13 +157,14 @@ def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer
         comparison = tvu.make_grid(comparison, normalize=False, scale_each=True)
         logger.add_image('reconstruction example', comparison, epoch)
 
+
     if use_visdom:
         # Visdom: update training and validation loss plots
         vis.add_scalar(t_loss, epoch, 'Training loss', idtag='train')
         vis.add_scalar(v_loss, epoch, 'Validation loss', idtag='valid')
 
         # Visdom: Show generated images
-        sample = latentspace_example(model, latent_size, data_loader, conditional, args.cuda)
+        sample = generation_example(model, latent_size, data_loader, conditional, args.cuda)
         sample = sample.detach().numpy()
         vis.add_image(sample, 'Generated sample ' + str(epoch), 'generated')
 
@@ -264,7 +265,7 @@ for epoch in range(1, num_epochs + 1):
 
 
 # Write a final sample to disk
-sample = latentspace_example(model, latent_size, data_loader, conditional, args.cuda)
+sample = generation_example(model, latent_size, data_loader, conditional, args.cuda)
 save_image(sample, 'output/sample_' + str(num_epochs) + '.png')
 
 # Make a final reconstruction, and write to disk
