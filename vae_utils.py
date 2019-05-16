@@ -1,7 +1,5 @@
 import torch
-import numpy as np
-
-from nn_helpers.utils import init_weights, one_hot, to_cuda, type_tfloat, randn, eye
+from nn_helpers.utils import one_hot, to_cuda, type_tfloat, randn, eye
 
 
 def reconstruction_example(model, data_loader, conditional, use_cuda):
@@ -26,7 +24,7 @@ def reconstruction_example(model, data_loader, conditional, use_cuda):
     return comparison
 
 
-def latentspace_example(model, latent_size, data_loader, conditional, use_cuda):
+def generation_example(model, latent_size, data_loader, conditional, use_cuda):
     num_class = data_loader.num_class
     img_shape = data_loader.img_shape[1:]
 
@@ -38,6 +36,16 @@ def latentspace_example(model, latent_size, data_loader, conditional, use_cuda):
         sample = model.decode(draw).cpu().view(num_class, 1, img_shape[0], img_shape[1])
 
     return sample
+
+
+# should be an iter next
+def latentspace2d_example(model, data_loader, use_cuda):
+    model.eval()
+    for _, (x, y) in enumerate(data_loader.test_loader):
+        x = to_cuda(x) if use_cuda else x
+        _, z, _ = model(x)
+        break
+    return z.detach().cpu().numpy(), y.cpu().numpy()
 
 
 def save_checkpoint(state, filename):

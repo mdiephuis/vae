@@ -10,7 +10,7 @@ import torchvision.utils as tvu
 from tensorboardX import SummaryWriter
 
 from vae_models import INFO_VAE2
-from vae_utils import reconstruction_example, latentspace_example, save_checkpoint
+from vae_utils import reconstruction_example, generation_example, latentspace2d_example, save_checkpoint
 
 from nn_helpers.losses import loss_bce_kld, EarlyStopping, loss_infovae
 from nn_helpers.utils import init_weights, one_hot, to_cuda, type_tfloat, randn, eye
@@ -148,7 +148,7 @@ def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer
         # todo: log gradient values of the model
 
         # image generation examples
-        sample = latentspace_example(model, latent_size, data_loader, conditional, args.cuda)
+        sample = generation_example(model, latent_size, data_loader, conditional, args.cuda)
         sample = sample.detach()
         sample = tvu.make_grid(sample, normalize=False, scale_each=True)
         logger.add_image('generation example', sample, epoch)
@@ -159,13 +159,19 @@ def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer
         comparison = tvu.make_grid(comparison, normalize=False, scale_each=True)
         logger.add_image('reconstruction example', comparison, epoch)
 
+                # latent space scatter example
+        if args.latent_size == 2:
+            z, labels = latentspace2d_example(model, data_loader, args.use_cuda)
+            
+
+
     if use_visdom:
         # Visdom: update training and validation loss plots
         vis.add_scalar(t_loss, epoch, 'Training loss', idtag='train')
         vis.add_scalar(v_loss, epoch, 'Validation loss', idtag='valid')
 
         # Visdom: Show generated images
-        sample = latentspace_example(model, latent_size, data_loader, conditional, args.cuda)
+        sample = generation_example(model, latent_size, data_loader, conditional, args.cuda)
         sample = sample.detach().numpy()
         vis.add_image(sample, 'Generated sample ' + str(epoch), 'generated')
 
@@ -192,6 +198,8 @@ def train_validate(model, data_loader, loss_fn, optimizer, conditional, train):
             opt.zero_grad()
 
         x_hat, mu_z, std_z = model(x)
+
+        print(mu_z.size())
 
         loss = loss_fn(x, x_hat, mu_z, std_z, args.alpha, args.beta, args.cuda)
 
@@ -226,6 +234,7 @@ encoder_size = args.encoder_size
 decoder_size = args.encoder_size
 latent_size = args.latent_size
 out_channels = args.out_channels
+conditional = False
 
 # Model
 model = INFO_VAE2(input_shape, out_channels,
@@ -241,7 +250,7 @@ early_stopping = EarlyStopping('min', 0.0005, 15)
 loss_fn = loss_infovae
 
 num_epochs = args.epochs
-conditional = True
+
 best_loss = np.inf
 # Main training and validation loop
 
@@ -265,7 +274,7 @@ for epoch in range(1, num_epochs + 1):
         break
 
 # Write a final sample to disk
-sample = latentspace_example(model, latent_size, data_loader, conditional, args.cuda)
+sample = generation_example(model, latent_size, data_loader, conditional, args.cuda)
 save_image(sample, 'output/sample_' + str(num_epochs) + '.png')
 
 # Make a final reconstruction, and write to disk
