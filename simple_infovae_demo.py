@@ -220,7 +220,6 @@ Get the dataloader
 data_loader = Loader(args.dataset_name, args.data_dir,
                      args.download_data, True, args.batch_size, None, None, args.cuda)
 
-
 """
 Model parameters
 """
@@ -279,9 +278,11 @@ save_image(comparison, 'output/comparison_' + str(num_epochs) + '.png')
 
 # latent space scatter example
 if args.latent_size == 2:
-    z, labels = latentspace2d_example(model, data_loader, args.use_cuda)
+    centroids, labels = latentspace2d_example(model, data_loader, args.cuda)
+    cmap = ['b', 'g', 'r', 'c', 'y', 'm', 'k']
+    colors = [cmap[(int(i) % 7)] for i in labels]
     fig = plt.figure()
-    plt.scatter(z[:, 0], z[:, 1], c=labels)
+    plt.scatter(centroids[:, 0], centroids[:, 1], c=colors, cmap=plt.cm.Spectral)
     plt.savefig('output/InfoVAE_z_cluster.png')
     plt.close(fig)
 
