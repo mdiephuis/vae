@@ -8,15 +8,19 @@ from torchvision.utils import save_image
 
 import torchvision.utils as tvu
 from tensorboardX import SummaryWriter
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+# Use to create a figure without displaying it.
 
 from vae_models import CVAE, VAE, FVAE
-from vae_utils import reconstruction_example, generation_example, save_checkpoint
+from vae_utils import reconstruction_example, generation_example, latentspace2d_example, latentcluster2d_example, save_checkpoint
 
 from nn_helpers.losses import loss_bce_kld, EarlyStopping
 from nn_helpers.utils import init_weights, one_hot, to_cuda, type_tfloat, randn, eye
 from nn_helpers.visdom_grapher import VisdomGrapher
 from nn_helpers.data import Loader
 
+mpl.use('Agg')
 
 parser = argparse.ArgumentParser(description='CVAE example')
 
@@ -271,6 +275,16 @@ save_image(sample, 'output/sample_' + str(num_epochs) + '.png')
 # Make a final reconstruction, and write to disk
 comparison = reconstruction_example(model, data_loader, conditional, args.cuda)
 save_image(comparison, 'output/comparison_' + str(num_epochs) + '.png')
+
+# latent space scatter example
+if args.latent_size == 2:
+    centroids, labels = latentcluster2d_example(model, data_loader, args.cuda)
+    cmap = ['b', 'g', 'r', 'c', 'y', 'm', 'k']
+    colors = [cmap[(int(i) % 7)] for i in labels]
+    fig = plt.figure()
+    plt.scatter(centroids[:, 0], centroids[:, 1], c=colors, cmap=plt.cm.Spectral)
+    plt.savefig('output/SimpleVAE_z_cluster.png')
+    plt.close(fig)
 
 # TensorboardX logger
 logger.close()

@@ -11,16 +11,16 @@ from tensorboardX import SummaryWriter
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-mpl.use('Agg')
 
 from vae_models import INFO_VAE2
-from vae_utils import reconstruction_example, generation_example, latentspace2d_example, save_checkpoint
+from vae_utils import reconstruction_example, generation_example, latentspace2d_example, latentcluster2d_example, save_checkpoint
 
 from nn_helpers.losses import loss_bce_kld, EarlyStopping, loss_infovae
 from nn_helpers.utils import init_weights, one_hot, to_cuda, type_tfloat, randn, eye
 from nn_helpers.visdom_grapher import VisdomGrapher
 from nn_helpers.data import Loader
 
+mpl.use('Agg')
 
 parser = argparse.ArgumentParser(description='VAE example')
 
@@ -152,15 +152,18 @@ def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer
         # todo: log gradient values of the model
 
         # image generation examples
-        sample = generation_example(model, latent_size, data_loader, conditional, args.cuda)
+        sample = generation_example(
+            model, latent_size, data_loader, conditional, args.cuda)
         sample = sample.detach()
         sample = tvu.make_grid(sample, normalize=False, scale_each=True)
         logger.add_image('generation example', sample, epoch)
 
         # image reconstruction examples
-        comparison = reconstruction_example(model, data_loader, conditional, args.cuda)
+        comparison = reconstruction_example(
+            model, data_loader, conditional, args.cuda)
         comparison = comparison.detach()
-        comparison = tvu.make_grid(comparison, normalize=False, scale_each=True)
+        comparison = tvu.make_grid(
+            comparison, normalize=False, scale_each=True)
         logger.add_image('reconstruction example', comparison, epoch)
 
     if use_visdom:
@@ -169,14 +172,17 @@ def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer
         vis.add_scalar(v_loss, epoch, 'Validation loss', idtag='valid')
 
         # Visdom: Show generated images
-        sample = generation_example(model, latent_size, data_loader, conditional, args.cuda)
+        sample = generation_example(
+            model, latent_size, data_loader, conditional, args.cuda)
         sample = sample.detach().numpy()
         vis.add_image(sample, 'Generated sample ' + str(epoch), 'generated')
 
         # Visdom: Show example reconstruction from the test set
-        comparison = reconstruction_example(model, data_loader, conditional, args.cuda)
+        comparison = reconstruction_example(
+            model, data_loader, conditional, args.cuda)
         comparison = comparison.detach().numpy()
-        vis.add_image(comparison, 'Reconstruction sample ' + str(epoch), 'recon')
+        vis.add_image(comparison, 'Reconstruction sample ' +
+                      str(epoch), 'recon')
 
     return v_loss
 
@@ -269,7 +275,8 @@ for epoch in range(1, num_epochs + 1):
         break
 
 # Write a final sample to disk
-sample = generation_example(model, latent_size, data_loader, conditional, args.cuda)
+sample = generation_example(
+    model, latent_size, data_loader, conditional, args.cuda)
 save_image(sample, 'output/sample_' + str(num_epochs) + '.png')
 
 # Make a final reconstruction, and write to disk
@@ -278,11 +285,12 @@ save_image(comparison, 'output/comparison_' + str(num_epochs) + '.png')
 
 # latent space scatter example
 if args.latent_size == 2:
-    centroids, labels = latentspace2d_example(model, data_loader, args.cuda)
+    centroids, labels = latentcluster2d_example(model, data_loader, args.cuda)
     cmap = ['b', 'g', 'r', 'c', 'y', 'm', 'k']
     colors = [cmap[(int(i) % 7)] for i in labels]
     fig = plt.figure()
-    plt.scatter(centroids[:, 0], centroids[:, 1], c=colors, cmap=plt.cm.Spectral)
+    plt.scatter(centroids[:, 0], centroids[:, 1],
+                c=colors, cmap=plt.cm.Spectral)
     plt.savefig('output/InfoVAE_z_cluster.png')
     plt.close(fig)
 

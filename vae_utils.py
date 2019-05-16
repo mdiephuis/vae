@@ -39,8 +39,11 @@ def generation_example(model, latent_size, data_loader, conditional, use_cuda):
     return sample
 
 
-# should be an iter next
 def latentspace2d_example(model, data_loader, use_cuda):
+    return
+
+
+def latentcluster2d_example(model, data_loader, use_cuda):
     model.eval()
     centroids_x, centroids_y = [], []
     labels = []
@@ -48,10 +51,10 @@ def latentspace2d_example(model, data_loader, use_cuda):
         x = to_cuda(x) if use_cuda else x
         _, z, _ = model(x)
         z = z.detach().cpu().numpy()
-        centroids_x.append(z[:, 0])
-        centroids_y.append(z[:, 1])
+        centroids_x.extend(z[:, 0])
+        centroids_y.extend(z[:, 1])
         y = y.detach().cpu().numpy()
-        labels.append(y[:])
+        labels.extend(y.flatten())
 
     centroids = np.vstack((np.asarray(centroids_x), np.asarray(centroids_y))).T
     return centroids, labels
