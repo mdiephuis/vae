@@ -7,9 +7,11 @@ from __future__ import print_function
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+import torch.distributions as D
 import numpy as np
 
 from nn_helpers.layers import DCGAN_Encoder, DCGAN_Decoder, DCGAN2_Encoder, DCGAN2_Decoder
+from nn_helpers.utils import one_hot, to_cuda, type_tfloat, randn, eye, sample_normal
 
 
 class VAE(nn.Module):
@@ -136,69 +138,6 @@ class INFO_VAE2(nn.Module):
         return x_hat, mu_z, std_z
 
 
-class PlanarFlow(nn.Module):
-    def __init__(self, input_shape):
-        super(PlanarFlow, self).__init__()
-        self.input_shape = np.prod(input_shape)
-        self.scale = nn.Parameter(torch.Tensor(1, input_shape))
-        self.weight = nn.Parameter(torch.Tensor(1, input_shape))
-        self.bias = nn.Parameter(torch.Tensor(1))
-
-    def forward(self, z):
-        f_z = nn.linear(z, self.weight, self.bias)
-        return z + self.scale * torch.tanh(f_z)
-
-    def log_abs_det_jacobian(self, z):
-        f_z = nn.linear(z, self.weight, self.bias)
-        psi = (1 - torch.tanh(f_z) ** 2) * self.weight
-        det_grad = 1 + torch.mm(psi, self.scale.t())
-        log_det_grad = torch.log(det_grad.abs() + 1e-9)
-        return log_det_grad
-
-
-class RadialFlow(nn.Module):
-    def __init__(self, input_shape):
-        super(RadialFlow, self).__init__()
-        self.input_shape = np.prod(input_shape)
-        self.alpha = nn.Parameter(torch.Tensor(1))
-        self.beta = nn.Parameter(torch.Tensor(1))
-        self.z0 = nn.Parameter(torch.Tensor(1, input_shape))
-
-    def forward(self, z):
-        r = torch.norm(z - self.z0, dim=1).unsqueeze(1)
-        h = 1. / (self.alpha + r)
-        return z + (self.beta * h * (z - self.z0))
-
-    def log_abs_det_jacobian(self, z):
-        r = torch.norm(z - self.z0, dim=1).unsqueeze(1)
-        h = 1. / (self.alpha + r)
-        dh = -1. / (self.alpha + r) ** 2
-        base = 1 + self.beta * h
-        det_grad = (base ** self.dim - 1) * (base + self.beta * dh * r)
-        log_det_grad = torch.log(det_grad.abs() + 1e-9)
-        return log_det_grad
-
-
-class NormalizingFlow(nn.Module):
-    def __init__(self, input_shape, f_blocks, length_flow):
-        super(NormalizingFlow, self).__init__()
-        self.input_shape = np.prod(input_shape)
-        bijector_list = []
-        for f in range(length_flow):
-            for f_block in f_blocks:
-                bijector_list.append(f_block(input_shape))
-
-        self.bijectors = nn.ModuleList(bijector_list)
-        self.log_det = []
-
-    def forward(self, z):
-        self.log_det = []
-        for b in range(len(self.bijectors)):
-            self.log_det.append(self.bijectors[b].log_abs_det_jacobian(z))
-            z = self.bijectors[b](z)
-        return z, self.log_det
-
-
 class FVAE(nn.Module):
     def __init__(self, input_shape, encoder_size, decoder_size, latent_size):
         super(FVAE, self).__init__()
@@ -263,3 +202,91 @@ class FVAE(nn.Module):
         z = self.reparameterize(mu, std)
         x_hat = self.decode(z)
         return x_hat, mu, std
+
+
+class PlanarFlow(nn.Module):
+    def __init__(self, input_shape):
+        super(PlanarFlow, self).__init__()
+        self.input_shape = np.prod(input_shape)
+        self.scale = nn.Parameter(torch.Tensor(1, input_shape))
+        self.weight = nn.Parameter(torch.Tensor(1, input_shape))
+        self.bias = nn.Parameter(torch.Tensor(1))
+
+    def forward(self, z):
+        f_z = nn.linear(z, self.weight, self.bias)
+        return z + self.scale * torch.tanh(f_z)
+
+    def log_abs_det_jacobian(self, z):
+        f_z = nn.linear(z, self.weight, self.bias)
+        psi = (1 - torch.tanh(f_z) ** 2) * self.weight
+        det_grad = 1 + torch.mm(psi, self.scale.t())
+        log_det_grad = torch.log(det_grad.abs() + 1e-9)
+        return log_det_grad
+
+
+class RadialFlow(nn.Module):
+    def __init__(self, input_shape):
+        super(RadialFlow, self).__init__()
+        self.input_shape = np.prod(input_shape)
+        self.alpha = nn.Parameter(torch.Tensor(1))
+        self.beta = nn.Parameter(torch.Tensor(1))
+        self.z0 = nn.Parameter(torch.Tensor(1, input_shape))
+
+    def forward(self, z):
+        r = torch.norm(z - self.z0, dim=1).unsqueeze(1)
+        h = 1. / (self.alpha + r)
+        return z + (self.beta * h * (z - self.z0))
+
+    def log_abs_det_jacobian(self, z):
+        r = torch.norm(z - self.z0, dim=1).unsqueeze(1)
+        h = 1. / (self.alpha + r)
+        dh = -1. / (self.alpha + r) ** 2
+        base = 1 + self.beta * h
+        det_grad = (base ** self.dim - 1) * (base + self.beta * dh * r)
+        log_det_grad = torch.log(det_grad.abs() + 1e-9)
+        return log_det_grad
+
+
+class NormalizingFlow(nn.Module):
+    def __init__(self, input_shape, f_blocks, length_flow):
+        super(NormalizingFlow, self).__init__()
+        self.input_shape = np.prod(input_shape)
+        bijector_list = []
+        for f in range(length_flow):
+            for f_block in f_blocks:
+                bijector_list.append(f_block(input_shape))
+
+        self.bijectors = nn.ModuleList(bijector_list)
+        self.log_det = []
+
+    def forward(self, z):
+        self.log_det = []
+        for b in range(len(self.bijectors)):
+            self.log_det.append(self.bijectors[b].log_abs_det_jacobian(z))
+            z = self.bijectors[b](z)
+        return z, self.log_det
+
+
+class VAENormalizingFlow(FVAE):
+    def __init__(self, input_shape, flow, encoder_size, decoder_size, latent_size):
+        super(VAENormalizingFlow, self).__init__(input_shape, encoder_size, decoder_size, latent_size)
+        self.flow = flow
+
+    def latent(self, x, mu_z, std_z):
+        batch_size = x.size(0)
+        # re-parametrize normal distribution
+        q = D.Normal(torch.zeros(mu_z.shape[1]), torch.ones(std_z.shape[1]))
+        z_0 = std_z * q.sample((batch_size, )) + mu_z
+
+        # Ameliorate posterior with flow
+        z_k, log_abs_det_jacobians = self.flow(z_0)
+        delta_z = z_0 - mu_z
+        log_pk_z = -0.5 * z_k * z_k
+        log_q_z0 = -0.5 * (std_z.log() + delta_z ** 2 * std_z.reciprocal())
+
+        # Add determinants
+        ladj = torch.cat(log_abs_det_jacobians)
+
+        logs = torch.sum(log_q_z0 - log_pk_z) - torch.sum(ladj)
+
+        return z_k, logs / float(batch_size)

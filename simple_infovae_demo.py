@@ -22,11 +22,11 @@ from nn_helpers.data import Loader
 
 mpl.use('Agg')
 
-parser = argparse.ArgumentParser(description='VAE example')
+parser = argparse.ArgumentParser(description='InfoVAE example')
 
 # Task parameters
-parser.add_argument('--uid', type=str, default='VAE',
-                    help='Staging identifier (default:VAE)')
+parser.add_argument('--uid', type=str, default='IVAE',
+                    help='Staging identifier (default:IVAE)')
 
 # Model parameters
 parser.add_argument('--latent-size', type=int, default=10, metavar='N',

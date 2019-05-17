@@ -9,20 +9,24 @@ from torchvision.utils import save_image
 import torchvision.utils as tvu
 from tensorboardX import SummaryWriter
 
-from vae_models import INFO_VAE2
-from vae_utils import reconstruction_example, generation_example, save_checkpoint
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+
+from vae_models import INFO_VAE2, FVAE
+from vae_utils import reconstruction_example, generation_example, latentspace2d_example, latentcluster2d_example, save_checkpoint
 
 from nn_helpers.losses import loss_bce_kld, EarlyStopping, loss_infovae
 from nn_helpers.utils import init_weights, one_hot, to_cuda, type_tfloat, randn, eye
 from nn_helpers.visdom_grapher import VisdomGrapher
 from nn_helpers.data import Loader
 
+mpl.use('Agg')
 
-parser = argparse.ArgumentParser(description='VAE example')
+parser = argparse.ArgumentParser(description='NF FLOW VAE example')
 
 # Task parameters
-parser.add_argument('--uid', type=str, default='VAE',
-                    help='Staging identifier (default:VAE)')
+parser.add_argument('--uid', type=str, default='FVAE',
+                    help='Staging identifier (default:FVAE)')
 
 # Model parameters
 parser.add_argument('--latent-size', type=int, default=10, metavar='N',
@@ -42,11 +46,11 @@ parser.add_argument('--beta', type=float, default=51.0, metavar='N',
 
 
 # data loader parameters
-parser.add_argument('--dataset-name', type=str, default=None,
+parser.add_argument('--dataset-name', type=str, default='mnist',
                     help='Name of dataset (default: none')
-parser.add_argument('--data-dir', type=str, default=None,
+parser.add_argument('--data-dir', type=str, default='data/',
                     help='directory to load data from (default: none')
-parser.add_argument('--download-data', action='store_true', default=False,
+parser.add_argument('--download-data', action='store_true', default=True,
                     help='Automatically download dataset (default: false)')
 parser.add_argument('--batch-size', type=int, default=23, metavar='N',
                     help='input training batch-size')
@@ -127,10 +131,12 @@ def get_optimizer(model):
 
 def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer, use_visdom, use_tb):
     # Training los loss_fn
-    t_loss = train_validate(model, data_loader, loss_fn, optimizer, conditional, train=True)
+    t_loss = train_validate(model, data_loader, loss_fn,
+                            optimizer, conditional, train=True)
 
     # Validation loss
-    v_loss = train_validate(model, data_loader, loss_fn, optimizer, conditional, train=False)
+    v_loss = train_validate(model, data_loader, loss_fn,
+                            optimizer, conditional, train=False)
 
     # Step the scheduler based on the validation loss
     scheduler.step(v_loss)
@@ -146,17 +152,19 @@ def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer
         # todo: log gradient values of the model
 
         # image generation examples
-        sample = generation_example(model, latent_size, data_loader, conditional, args.cuda)
+        sample = generation_example(
+            model, latent_size, data_loader, conditional, args.cuda)
         sample = sample.detach()
         sample = tvu.make_grid(sample, normalize=False, scale_each=True)
         logger.add_image('generation example', sample, epoch)
 
         # image reconstruction examples
-        comparison = reconstruction_example(model, data_loader, conditional, args.cuda)
+        comparison = reconstruction_example(
+            model, data_loader, conditional, args.cuda)
         comparison = comparison.detach()
-        comparison = tvu.make_grid(comparison, normalize=False, scale_each=True)
+        comparison = tvu.make_grid(
+            comparison, normalize=False, scale_each=True)
         logger.add_image('reconstruction example', comparison, epoch)
-
 
     if use_visdom:
         # Visdom: update training and validation loss plots
@@ -164,14 +172,17 @@ def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer
         vis.add_scalar(v_loss, epoch, 'Validation loss', idtag='valid')
 
         # Visdom: Show generated images
-        sample = generation_example(model, latent_size, data_loader, conditional, args.cuda)
+        sample = generation_example(
+            model, latent_size, data_loader, conditional, args.cuda)
         sample = sample.detach().numpy()
         vis.add_image(sample, 'Generated sample ' + str(epoch), 'generated')
 
         # Visdom: Show example reconstruction from the test set
-        comparison = reconstruction_example(model, data_loader, conditional, args.cuda)
+        comparison = reconstruction_example(
+            model, data_loader, conditional, args.cuda)
         comparison = comparison.detach().numpy()
-        vis.add_image(comparison, 'Reconstruction sample ' + str(epoch), 'recon')
+        vis.add_image(comparison, 'Reconstruction sample ' +
+                      str(epoch), 'recon')
 
     return v_loss
 
@@ -190,11 +201,9 @@ def train_validate(model, data_loader, loss_fn, optimizer, conditional, train):
         if train:
             opt.zero_grad()
 
-        # Fix this
-        x_hat, z_mu_train, std_z, z_std_logdet = model(x)
+        x_hat, mu_z, std_z = model(x)
 
-        loss = loss_fn(x, x_hat, z_mu_train, std_z, args.alpha, args.beta)
-        # loss_fn 
+        loss = loss_fn(x, x_hat, mu_z, std_z, args.alpha, args.beta, args.cuda)
 
         batch_loss += loss.item() / batch_size
 
@@ -214,8 +223,8 @@ if use_visdom:
 """
 Get the dataloader
 """
-data_loader = Loader(args.dataset_name, args.data_dir, args.download_data, True, args.batch_size, None, None, args.cuda)
-
+data_loader = Loader(args.dataset_name, args.data_dir,
+                     args.download_data, True, args.batch_size, None, None, args.cuda)
 
 """
 Model parameters
@@ -226,9 +235,10 @@ encoder_size = args.encoder_size
 decoder_size = args.encoder_size
 latent_size = args.latent_size
 out_channels = args.out_channels
+conditional = False
 
 # Model
-model = INFO_VAE2(input_shape, out_channels, encoder_size, latent_size).type(dtype)
+model = FVAE(input_shape, out_channels, encoder_size, latent_size).type(dtype)
 model.apply(init_weights)
 
 opt = get_optimizer(model)
@@ -240,7 +250,7 @@ early_stopping = EarlyStopping('min', 0.0005, 15)
 loss_fn = loss_infovae
 
 num_epochs = args.epochs
-conditional = True
+
 best_loss = np.inf
 # Main training and validation loop
 
@@ -258,19 +268,37 @@ for epoch in range(1, num_epochs + 1):
                         'state_dict': model.state_dict(),
                         'val_loss': v_loss
                         },
-                        'models/FLOWVAE_{:04.4f}.pt'.format(v_loss))
+                        'models/INFOVAE_{:04.4f}.pt'.format(v_loss))
     if stop:
         print('Early stopping at epoch: {}'.format(epoch))
         break
 
-
 # Write a final sample to disk
-sample = generation_example(model, latent_size, data_loader, conditional, args.cuda)
+sample = generation_example(
+    model, latent_size, data_loader, conditional, args.cuda)
 save_image(sample, 'output/sample_' + str(num_epochs) + '.png')
 
 # Make a final reconstruction, and write to disk
 comparison = reconstruction_example(model, data_loader, conditional, args.cuda)
 save_image(comparison, 'output/comparison_' + str(num_epochs) + '.png')
+
+# latent space scatter example
+if args.latent_size == 2:
+    centroids, labels = latentcluster2d_example(model, data_loader, args.cuda)
+    cmap = ['b', 'g', 'r', 'c', 'y', 'm', 'k']
+    colors = [cmap[(int(i) % 7)] for i in labels]
+    fig = plt.figure()
+    plt.scatter(centroids[:, 0], centroids[:, 1],
+                c=colors, cmap=plt.cm.Spectral)
+    plt.savefig('output/FVAE_z_cluster.png')
+    plt.close(fig)
+
+    latent_space = latentspace2d_example(model, data_loader, args.cuda)
+    fig = plt.figure()
+    plt.imshow(latent_space)
+    plt.tight_layout()
+    plt.savefig('output/FVAE_z_space.png')
+    plt.close(fig)
 
 # TensorboardX logger
 logger.close()

@@ -36,7 +36,7 @@ parser.add_argument('--latent-size', type=int, default=20, metavar='N',
                     help='VAE latent size (default: 20')
 
 parser.add_argument('--encoder-size', type=int, default=512, metavar='N',
-                    help='VAE encoder size (default: 200')
+                    help='VAE encoder size (default: 512')
 
 # data loader parameters
 parser.add_argument('--dataset-name', type=str, default=None,
@@ -233,7 +233,7 @@ conditional = args.conditional
 if conditional:
     model = CVAE(input_shape, encoder_size, latent_size, num_class).type(dtype)
 else:
-    model = VAE(input_shape, encoder_size, latent_size, num_class).type(dtype)
+    model = FVAE(input_shape, encoder_size, encoder_size, latent_size).type(dtype)
 
 model.apply(init_weights)
 
