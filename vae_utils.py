@@ -9,15 +9,14 @@ def reconstruction_example(model, data_loader, conditional, use_cuda):
     num_class = data_loader.num_class
     img_shape = data_loader.img_shape[1:]
 
-    for _, (x, y) in enumerate(data_loader.test_loader):
-        x = to_cuda(x) if use_cuda else x
-        if conditional:
-            y = one_hot(y, num_class)
-            y = y.type(type_tfloat(use_cuda))
-            x_hat, _, _ = model(x, y)
-        else:
-            x_hat, _, _ = model(x)
-        break
+    x, y = next(iter(data_loader.test_loader))
+    x = to_cuda(x) if use_cuda else x
+    if conditional:
+        y = one_hot(y, num_class)
+        y = y.type(type_tfloat(use_cuda))
+        x_hat, _, _ = model(x, y)
+    else:
+        x_hat, _, _ = model(x)
 
     x = x[:num_class].cpu().view(num_class * img_shape[0], img_shape[1])
     x_hat = x_hat[:num_class].cpu().view(num_class * img_shape[0], img_shape[1])
