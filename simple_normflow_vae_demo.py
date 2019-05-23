@@ -12,7 +12,7 @@ from tensorboardX import SummaryWriter
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 
-from vae_models import INFO_VAE2, FVAE
+from vae_models import INFO_VAE2, FVAE, PlanarFlow, NormalizingFlow, VAENormalizingFlow
 from vae_utils import reconstruction_example, generation_example, latentspace2d_example, latentcluster2d_example, save_checkpoint
 
 from nn_helpers.losses import loss_bce_kld, EarlyStopping, loss_infovae
@@ -25,24 +25,18 @@ mpl.use('Agg')
 parser = argparse.ArgumentParser(description='NF FLOW VAE example')
 
 # Task parameters
-parser.add_argument('--uid', type=str, default='FVAE',
-                    help='Staging identifier (default:FVAE)')
+parser.add_argument('--uid', type=str, default='NFVAE',
+                    help='Staging identifier (default:NFVAE)')
 
 # Model parameters
-parser.add_argument('--latent-size', type=int, default=10, metavar='N',
-                    help='VAE latent size (default: 10')
+parser.add_argument('--latent-size', type=int, default=2, metavar='N',
+                    help='VAE latent size (default: 2')
 
 parser.add_argument('--out-channels', type=int, default=64, metavar='N',
                     help='VAE 2D conv channel output (default: 64')
 
-parser.add_argument('--encoder-size', type=int, default=1024, metavar='N',
-                    help='VAE encoder size (default: 1024')
-
-# InfoVAE specific
-parser.add_argument('--alpha', type=float, default=50.0, metavar='N',
-                    help='InfoVAE alpha (default: 50.0')
-parser.add_argument('--beta', type=float, default=51.0, metavar='N',
-                    help='InfoVAE beta (default: 51.0')
+parser.add_argument('--encoder-size', type=int, default=512, metavar='N',
+                    help='VAE encoder size (default: 512')
 
 
 # data loader parameters
@@ -237,9 +231,24 @@ latent_size = args.latent_size
 out_channels = args.out_channels
 conditional = False
 
-# Model
+# Model definitions
+block_planar = [PlanarFlow]
+
+# encoder decoder def
 model = FVAE(input_shape, out_channels, encoder_size, latent_size).type(dtype)
+
+#  def __init__(self, input_shape, f_blocks, length_flow):
+flow = NormalizingFlow()
+
+# def __init__(self, input_shape, flow, encoder_size, decoder_size, latent_size):
+model_flow = VAENormalizingFlow()
+
+
+
+
 model.apply(init_weights)
+
+
 
 opt = get_optimizer(model)
 scheduler = ReduceLROnPlateau(opt, 'min', verbose=True)
@@ -268,7 +277,7 @@ for epoch in range(1, num_epochs + 1):
                         'state_dict': model.state_dict(),
                         'val_loss': v_loss
                         },
-                        'models/INFOVAE_{:04.4f}.pt'.format(v_loss))
+                        'models/NFVAE_{:04.4f}.pt'.format(v_loss))
     if stop:
         print('Early stopping at epoch: {}'.format(epoch))
         break
@@ -290,14 +299,14 @@ if args.latent_size == 2:
     fig = plt.figure()
     plt.scatter(centroids[:, 0], centroids[:, 1],
                 c=colors, cmap=plt.cm.Spectral)
-    plt.savefig('output/FVAE_z_cluster.png')
+    plt.savefig('output/NFVAE_z_cluster.png')
     plt.close(fig)
 
     latent_space = latentspace2d_example(model, data_loader, args.cuda)
     fig = plt.figure()
     plt.imshow(latent_space)
     plt.tight_layout()
-    plt.savefig('output/FVAE_z_space.png')
+    plt.savefig('output/NFVAE_z_space.png')
     plt.close(fig)
 
 # TensorboardX logger
