@@ -1,6 +1,56 @@
 import numpy as np
 import torch
-from nn_helpers.utils import one_hot, to_cuda, type_tfloat, randn, eye
+from nn_helpers.utils import one_hot, to_cuda, type_tfloat, randn, eye, zero_check_and_break
+from nn_helpers.losses import loss_bce, kl_div_gaussian
+
+
+def eval_data_nll(model, data_loader, sample_size, conditional, use_cuda):
+    '''
+    Evaluate the data negative log-likelihood for generative models
+    '''
+    model.eval()
+
+    batch_size = data_loader.batch_size
+    num_class = data_loader.num_class
+    data_nll = []
+
+    for x, y in data_loader.test_loader:
+        x = to_cuda(x) if use_cuda else x
+        indices = np.random.randint(0, x.size(0), size=sample_size)
+        loss = []
+        for ind in indices:
+            x_sample = x[ind].unsqueeze(0)
+            # fix this!
+            # y = y[ind]
+            # y = one_hot(y, num_class)
+            # # expand to original batch size for comparison
+            x = x_sample.expand(batch_size, *x_sample.size()[1:]).contiguous()
+            x = x.view(batch_size, -1)
+            if conditional:
+                x_hat, z_mu, z_std = model(x, y)
+            else:
+                x_hat, z_mu, z_std = model(x)
+
+            recon_loss = loss_bce(x, x_hat)
+            # print("Recon loss {}".format(recon_loss))
+
+            kl_div = kl_div_gaussian(z_mu, z_std)
+            # print("KL loss {}".format(recon_loss))
+
+            sample_loss = recon_loss + kl_div
+            sample_loss = - sample_loss.detach().cpu().numpy()
+            loss.append(sample_loss)
+
+        loss = np.asarray(loss)
+        sumexp = np.sum(np.exp(loss))
+        # print("sum exp loss {}".format(sumexp))
+
+        loss = np.log(sumexp) - np.log(sample_size)
+        data_nll.append(loss)
+
+    data_nll = np.asarray(data_nll)
+    data_nll = - np.mean(data_nll)
+    return data_nll
 
 
 def reconstruction_example(model, data_loader, conditional, use_cuda):
@@ -19,8 +69,10 @@ def reconstruction_example(model, data_loader, conditional, use_cuda):
         x_hat, _, _ = model(x)
 
     x = x[:num_class].cpu().view(num_class * img_shape[0], img_shape[1])
-    x_hat = x_hat[:num_class].cpu().view(num_class * img_shape[0], img_shape[1])
-    comparison = torch.cat((x, x_hat), 1).view(num_class * img_shape[0], 2 * img_shape[1])
+    x_hat = x_hat[:num_class].cpu().view(
+        num_class * img_shape[0], img_shape[1])
+    comparison = torch.cat((x, x_hat), 1).view(
+        num_class * img_shape[0], 2 * img_shape[1])
     return comparison
 
 
@@ -31,9 +83,11 @@ def generation_example(model, latent_size, data_loader, conditional, use_cuda):
     draw = randn((num_class, latent_size), use_cuda)
     if conditional:
         label = eye(num_class, use_cuda)
-        sample = model.decode(draw, label).cpu().view(num_class, 1, img_shape[0], img_shape[1])
+        sample = model.decode(draw, label).cpu().view(
+            num_class, 1, img_shape[0], img_shape[1])
     else:
-        sample = model.decode(draw).cpu().view(num_class, 1, img_shape[0], img_shape[1])
+        sample = model.decode(draw).cpu().view(
+            num_class, 1, img_shape[0], img_shape[1])
 
     return sample
 
@@ -51,7 +105,8 @@ def latentspace2d_example(model, data_loader, use_cuda):
     canvas = np.empty((num_y * img_shape[0], num_y * img_shape[1]))
     for i, yi in enumerate(x_values):
         for j, xi in enumerate(y_values):
-            draw = torch.from_numpy(np.array([[np.float(xi), np.float(yi)]] * batch_size))
+            draw = torch.from_numpy(
+                np.array([[np.float(xi), np.float(yi)]] * batch_size))
             draw = draw.type(type_tfloat(use_cuda))
 
             x_hat = model.decode(draw).cpu().detach().numpy()
