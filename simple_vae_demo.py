@@ -264,8 +264,8 @@ loss_fn = loss_bce_kld
 
 num_epochs = args.epochs
 best_loss = np.inf
-# Main training and validation loop
 
+# Main training and validation loop
 for epoch in range(1, num_epochs + 1):
     v_loss = execute_graph(model, conditional, data_loader,
                            loss_fn, scheduler, opt, use_visdom, use_tb)

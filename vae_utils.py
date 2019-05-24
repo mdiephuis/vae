@@ -17,36 +17,32 @@ def eval_data_nll(model, data_loader, sample_size, conditional, use_cuda):
     for x, y in data_loader.test_loader:
         x = to_cuda(x) if use_cuda else x
         indices = np.random.randint(0, x.size(0), size=sample_size)
-        loss = []
         for ind in indices:
             x_sample = x[ind].unsqueeze(0)
+            x_sample = x_sample.expand(batch_size, *x_sample.size()[1:]).contiguous()
+            x_sample = x_sample.view(batch_size, -1)
             # fix this!
             # y = y[ind]
             # y = one_hot(y, num_class)
             # # expand to original batch size for comparison
-            x_sample = x_sample.expand(batch_size, *x_sample.size()[1:]).contiguous()
-            x_sample = x_sample.view(batch_size, -1)
             if conditional:
                 x_hat, z_mu, z_std = model(x_sample, y)
             else:
-                x_hat, z_mu, z_std = model(x)
+                x_hat, z_mu, z_std = model(x_sample)
 
-            recon_loss = loss_bce(x, x_hat)
+            recon_loss = loss_bce(x_sample, x_hat)
             # print("Recon loss {}".format(recon_loss))
 
-            kl_div = kl_div_gaussian(z_mu, z_std)
+            kl_div = kl_div_gaussian(z_mu, torch.exp(torch.pow(z_std, 0.5)))
             # print("KL loss {}".format(recon_loss))
 
-            sample_loss = recon_loss + kl_div
-            sample_loss = - sample_loss.detach().cpu().numpy()
-            loss.append(sample_loss)
+            sample_loss = recon_loss.detach() + kl_div.detach()
+            sample_loss = - sample_loss.cpu().numpy()
+            sumexp = np.sum(np.exp(sample_loss))
+            print("sum exp loss {}".format(sumexp))
 
-        loss = np.asarray(loss)
-        sumexp = np.sum(np.exp(loss))
-        # print("sum exp loss {}".format(sumexp))
-
-        loss = np.log(sumexp) - np.log(sample_size)
-        data_nll.append(loss)
+            loss = np.log(sumexp) - np.log(sample_size)
+            data_nll.append(loss)
 
     data_nll = np.asarray(data_nll)
     data_nll = - np.mean(data_nll)
