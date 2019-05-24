@@ -24,10 +24,10 @@ def eval_data_nll(model, data_loader, sample_size, conditional, use_cuda):
             # y = y[ind]
             # y = one_hot(y, num_class)
             # # expand to original batch size for comparison
-            x = x_sample.expand(batch_size, *x_sample.size()[1:]).contiguous()
-            x = x.view(batch_size, -1)
+            x_sample = x_sample.expand(batch_size, *x_sample.size()[1:]).contiguous()
+            x_sample = x_sample.view(batch_size, -1)
             if conditional:
-                x_hat, z_mu, z_std = model(x, y)
+                x_hat, z_mu, z_std = model(x_sample, y)
             else:
                 x_hat, z_mu, z_std = model(x)
 

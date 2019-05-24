@@ -183,13 +183,10 @@ class FVAE(nn.Module):
         return mu, std
 
     def reparameterize(self, mu, std):
-        if self.training:
-            # std = torch.exp(0.5 * log_var)
-            eps = torch.randn_like(std)
-            z = eps.mul(std).add_(mu)
-            return z
-        else:
-            return mu
+        # std = torch.exp(0.5 * log_var)
+        eps = torch.randn_like(std)
+        z = eps.mul(std).add_(mu)
+        return z
 
     def decode(self, z):
         x_hat = z
