@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from nn_helpers.utils import one_hot, to_cuda, type_tfloat, randn, eye, zero_check_and_break
+from nn_helpers.utils import one_hot, to_cuda, type_tfloat, randn, eye, zero_check_and_break, pca_project
 from nn_helpers.losses import loss_bce, kl_div_gaussian
 
 
@@ -120,19 +120,25 @@ def latentspace2d_example(model, data_loader, use_cuda):
 
 def latentcluster2d_example(model, data_loader, use_cuda):
     model.eval()
-    centroids_x, centroids_y = [], []
+    data = []
     labels = []
     for _, (x, y) in enumerate(data_loader.test_loader):
         x = to_cuda(x) if use_cuda else x
         _, z, _ = model(x)
-        z = z.detach().cpu().numpy()
-        centroids_x.extend(z[:, 0])
-        centroids_y.extend(z[:, 1])
+        data.append(z.detach().cpu())
         y = y.detach().cpu().numpy()
         labels.extend(y.flatten())
 
-    centroids = np.vstack((np.asarray(centroids_x), np.asarray(centroids_y))).T
-    return centroids, labels
+    print(z.size())
+    centroids = torch.stack(data)
+    print(centroids.size())
+    print(len(data))
+    centroids = centroids.reshape(len(data) * z.size(0), z.size(1)).unsqueeze(0)
+
+    if centroids.size(1) > 2:
+        centroids = pca_project(centroids, 2)
+
+    return centroids.numpy(), labels
 
 
 def save_checkpoint(state, filename):
