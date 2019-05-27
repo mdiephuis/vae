@@ -134,7 +134,7 @@ def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer
                             optimizer, conditional, train=False)
 
     # Evaluate the negative log-likelihood
-    nll = eval_data_nll(model, data_loader, sample_size=5, conditional=conditional, use_cuda=args.cuda)
+    # nll = eval_data_nll(model, data_loader, sample_size=5, conditional=conditional, use_cuda=args.cuda)
 
     # Step the scheduler based on the validation loss
     scheduler.step(v_loss)
@@ -144,50 +144,44 @@ def execute_graph(model, conditional, data_loader, loss_fn, scheduler, optimizer
     print('====> Epoch: {} Average Validation loss: {:.4f}'.format(
           epoch, v_loss))
 
-    print('====> Epoch: {} Average Data Negative log-likelihood: {:.4f}'.format(
-          epoch, nll))
+    # print('====> Epoch: {} Average Data Negative log-likelihood: {:.4f}'.format(
+    #       epoch, nll))
 
     if use_tb:
         # Training and validation loss
         logger.add_scalar(log_dir + '/validation-loss', v_loss, epoch)
         logger.add_scalar(log_dir + '/training-loss', t_loss, epoch)
-        logger.add_scalar(log_dir + '/nll', nll, epoch)
+        # logger.add_scalar(log_dir + '/nll', nll, epoch)
 
         # todo: log gradient values of the model
 
         # image generation examples
-        sample = generation_example(
-            model, latent_size, data_loader, conditional, args.cuda)
+        sample = generation_example(model, latent_size, data_loader, conditional, args.cuda)
         sample = sample.detach()
         sample = tvu.make_grid(sample, normalize=False, scale_each=True)
         logger.add_image('generation example', sample, epoch)
 
         # image reconstruction examples
-        comparison = reconstruction_example(
-            model, data_loader, conditional, args.cuda)
+        comparison = reconstruction_example(model, data_loader, conditional, args.cuda)
         comparison = comparison.detach()
-        comparison = tvu.make_grid(
-            comparison, normalize=False, scale_each=True)
+        comparison = tvu.make_grid(comparison, normalize=False, scale_each=True)
         logger.add_image('reconstruction example', comparison, epoch)
 
     if use_visdom:
         # Visdom: update training and validation loss plots
         vis.add_scalar(t_loss, epoch, 'Training loss', idtag='train')
         vis.add_scalar(v_loss, epoch, 'Validation loss', idtag='valid')
-        vis.add_scalar(nll, epoch, 'Negative log-likelihood', idtag='nll')
+        # vis.add_scalar(nll, epoch, 'Negative log-likelihood', idtag='nll')
 
         # Visdom: Show generated images
-        sample = generation_example(
-            model, latent_size, data_loader, conditional, args.cuda)
+        sample = generation_example(model, latent_size, data_loader, conditional, args.cuda)
         sample = sample.detach().numpy()
         vis.add_image(sample, 'Generated sample ' + str(epoch), 'generated')
 
         # Visdom: Show example reconstruction from the test set
-        comparison = reconstruction_example(
-            model, data_loader, conditional, args.cuda)
+        comparison = reconstruction_example(model, data_loader, conditional, args.cuda)
         comparison = comparison.detach().numpy()
-        vis.add_image(comparison, 'Reconstruction sample ' +
-                      str(epoch), 'recon')
+        vis.add_image(comparison, 'Reconstruction sample ' +str(epoch), 'recon')
 
     return v_loss
 
@@ -295,7 +289,7 @@ comparison = reconstruction_example(model, data_loader, conditional, args.cuda)
 save_image(comparison, 'output/comparison_' + str(num_epochs) + '.png')
 
 # latent space scatter example
-centroids, labels = latentcluster2d_example(model, data_loader, args.cuda)
+centroids, labels = latentcluster2d_example(model, data_loader, args.conditional, args.cuda)
 cmap = ['b', 'g', 'r', 'c', 'y', 'm', 'k']
 colors = [cmap[(int(i) % 7)] for i in labels]
 fig = plt.figure()
@@ -303,7 +297,7 @@ plt.scatter(centroids[:, 0], centroids[:, 1], c=colors, cmap=plt.cm.Spectral)
 plt.savefig('output/SimpleVAE_z_cluster.png')
 plt.close(fig)
 
-if args.latent_size == 2:
+if args.latent_size == 2 and not args.conditional:
     latent_space = latentspace2d_example(model, data_loader, args.cuda)
     fig = plt.figure()
     plt.imshow(latent_space)

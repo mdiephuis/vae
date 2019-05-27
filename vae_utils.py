@@ -87,7 +87,6 @@ def generation_example(model, latent_size, data_loader, conditional, use_cuda):
 def latentspace2d_example(model, data_loader, use_cuda):
     model.eval()
     num_x, num_y = 20, 20
-    n_class = data_loader.num_class
     img_shape = data_loader.img_shape[1:]
     batch_size = data_loader.batch_size
 
@@ -110,13 +109,19 @@ def latentspace2d_example(model, data_loader, use_cuda):
     return canvas
 
 
-def latentcluster2d_example(model, data_loader, use_cuda):
+def latentcluster2d_example(model, data_loader, conditional, use_cuda):
     model.eval()
+    num_class = data_loader.num_class
     data = []
     labels = []
     for _, (x, y) in enumerate(data_loader.test_loader):
         x = to_cuda(x) if use_cuda else x
-        _, z, _ = model(x)
+        if conditional:
+            y_onehot = one_hot(y, num_class)
+            y_onehot = y_onehot.type(type_tfloat(use_cuda))
+            _, z, _ = model(x, y_onehot)
+        else:
+            _, z, _ = model(x)
         data.append(z.detach().cpu())
         y = y.detach().cpu().numpy()
         labels.extend(y.flatten())

@@ -293,7 +293,7 @@ save_image(comparison, 'output/comparison_' + str(num_epochs) + '.png')
 
 # latent space scatter example
 if args.latent_size == 2:
-    centroids, labels = latentcluster2d_example(model, data_loader, args.cuda)
+    centroids, labels = latentcluster2d_example(model, data_loader, args.conditional, args.cuda)
     cmap = ['b', 'g', 'r', 'c', 'y', 'm', 'k']
     colors = [cmap[(int(i) % 7)] for i in labels]
     fig = plt.figure()
