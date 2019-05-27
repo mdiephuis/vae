@@ -39,7 +39,7 @@ def eval_data_nll(model, data_loader, sample_size, conditional, use_cuda):
             sample_loss = recon_loss.detach() + kl_div.detach()
             sample_loss = - sample_loss.cpu().numpy()
             sumexp = np.sum(np.exp(sample_loss))
-            print("sum exp loss {}".format(sumexp))
+            # print("sum exp loss {}".format(sumexp))
 
             loss = np.log(sumexp) - np.log(sample_size)
             data_nll.append(loss)
@@ -65,10 +65,8 @@ def reconstruction_example(model, data_loader, conditional, use_cuda):
         x_hat, _, _ = model(x)
 
     x = x[:num_class].cpu().view(num_class * img_shape[0], img_shape[1])
-    x_hat = x_hat[:num_class].cpu().view(
-        num_class * img_shape[0], img_shape[1])
-    comparison = torch.cat((x, x_hat), 1).view(
-        num_class * img_shape[0], 2 * img_shape[1])
+    x_hat = x_hat[:num_class].cpu().view(num_class * img_shape[0], img_shape[1])
+    comparison = torch.cat((x, x_hat), 1).view(num_class * img_shape[0], 2 * img_shape[1])
     return comparison
 
 
@@ -79,11 +77,9 @@ def generation_example(model, latent_size, data_loader, conditional, use_cuda):
     draw = randn((num_class, latent_size), use_cuda)
     if conditional:
         label = eye(num_class, use_cuda)
-        sample = model.decode(draw, label).cpu().view(
-            num_class, 1, img_shape[0], img_shape[1])
+        sample = model.decode(draw, label).cpu().view(num_class, 1, img_shape[0], img_shape[1])
     else:
-        sample = model.decode(draw).cpu().view(
-            num_class, 1, img_shape[0], img_shape[1])
+        sample = model.decode(draw).cpu().view(num_class, 1, img_shape[0], img_shape[1])
 
     return sample
 
@@ -126,7 +122,7 @@ def latentcluster2d_example(model, data_loader, use_cuda):
         labels.extend(y.flatten())
 
     centroids = torch.cat(data)
-    centroids = centroids.reshape(len(data) * z.size(0), z.size(1)).unsqueeze(0)
+    centroids = centroids.reshape(-1, z.size(1))
 
     if centroids.size(1) > 2:
         centroids = pca_project(centroids, 2)

@@ -287,8 +287,7 @@ for epoch in range(1, num_epochs + 1):
 
 
 # Write a final sample to disk
-sample = generation_example(
-    model, latent_size, data_loader, conditional, args.cuda)
+sample = generation_example(model, latent_size, data_loader, conditional, args.cuda)
 save_image(sample, 'output/sample_' + str(num_epochs) + '.png')
 
 # Make a final reconstruction, and write to disk
@@ -300,17 +299,17 @@ centroids, labels = latentcluster2d_example(model, data_loader, args.cuda)
 cmap = ['b', 'g', 'r', 'c', 'y', 'm', 'k']
 colors = [cmap[(int(i) % 7)] for i in labels]
 fig = plt.figure()
-plt.scatter(centroids[:, 0], centroids[:, 1],
-            c=colors, cmap=plt.cm.Spectral)
+plt.scatter(centroids[:, 0], centroids[:, 1], c=colors, cmap=plt.cm.Spectral)
 plt.savefig('output/SimpleVAE_z_cluster.png')
 plt.close(fig)
 
-latent_space = latentspace2d_example(model, data_loader, args.cuda)
-fig = plt.figure()
-plt.imshow(latent_space)
-plt.tight_layout()
-plt.savefig('output/SimpleVAE_z_space.png')
-plt.close(fig)
+if args.latent_size == 2:
+    latent_space = latentspace2d_example(model, data_loader, args.cuda)
+    fig = plt.figure()
+    plt.imshow(latent_space)
+    plt.tight_layout()
+    plt.savefig('output/SimpleVAE_z_space.png')
+    plt.close(fig)
 
 # TensorboardX logger
 logger.close()
