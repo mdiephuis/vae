@@ -125,10 +125,7 @@ def latentcluster2d_example(model, data_loader, use_cuda):
         y = y.detach().cpu().numpy()
         labels.extend(y.flatten())
 
-    print(z.size())
-    centroids = torch.stack(data)
-    print(centroids.size())
-    print(len(data))
+    centroids = torch.cat(data)
     centroids = centroids.reshape(len(data) * z.size(0), z.size(1)).unsqueeze(0)
 
     if centroids.size(1) > 2:
