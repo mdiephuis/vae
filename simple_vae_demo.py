@@ -16,7 +16,7 @@ from vae_models import CVAE, VAE, FVAE
 from vae_utils import reconstruction_example, generation_example, latentspace2d_example, \
     latentcluster2d_example, save_checkpoint, eval_data_nll
 
-from nn_helpers.losses import loss_bce_kld, EarlyStopping
+from nn_helpers.losses import loss_bce_kld, loss_laplacian, EarlyStopping
 from nn_helpers.utils import init_weights, one_hot, to_cuda, type_tfloat, randn, eye
 from nn_helpers.visdom_grapher import VisdomGrapher
 from nn_helpers.data import Loader
@@ -207,7 +207,9 @@ def train_validate(model, data_loader, loss_fn, optimizer, conditional, train):
         else:
             x_hat, mu, log_var = model(x)
 
-        loss = loss_fn(x, x_hat, mu, log_var)
+        # loss = loss_fn(x, x_hat, mu, log_var)
+        loss = loss_fn(x, x_hat)
+
 
         batch_loss += loss.item() / batch_size
 
@@ -254,7 +256,8 @@ scheduler = ReduceLROnPlateau(opt, 'min', verbose=True)
 early_stopping = EarlyStopping('min', 0.0005, 25)
 
 # Set loss function
-loss_fn = loss_bce_kld
+# loss_fn = loss_bce_kld
+loss_fn = loss_laplacian
 
 num_epochs = args.epochs
 best_loss = np.inf
